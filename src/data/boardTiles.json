@@ -1,0 +1,11 @@
+[
+  { "index": 0, "type": "start", "label": "Start", "delta": 0 },
+  { "index": 1, "type": "normal", "label": "Trail", "delta": 0 },
+  { "index": 2, "type": "normal", "label": "Trail", "delta": 0 },
+  { "index": 3, "type": "bonus", "label": "Bonus", "delta": 2 },
+  { "index": 4, "type": "normal", "label": "Trail", "delta": 0 },
+  { "index": 5, "type": "penalty", "label": "Trap", "delta": -1 },
+  { "index": 6, "type": "normal", "label": "Trail", "delta": 0 },
+  { "index": 7, "type": "normal", "label": "Trail", "delta": 0 },
+  { "index": 8, "type": "finish", "label": "Finish", "delta": 0 }
+]

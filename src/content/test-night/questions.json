@@ -1,0 +1,16 @@
+[
+  {
+    "id": "q1",
+    "prompt": "What is the capital of France?",
+    "choices": ["Berlin", "Madrid", "Paris", "Rome"],
+    "answerIndex": 2,
+    "sourceRef": "general-knowledge"
+  },
+  {
+    "id": "q2",
+    "prompt": "Which color is the sky?",
+    "choices": ["Green", "Blue", "Red", "Yellow"],
+    "answerIndex": 1,
+    "sourceRef": "observation"
+  }
+]

@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: 'Fredoka One', cursive;
+  --font-body: 'Nunito', sans-serif;
+
+  --color-party-red: #ff4d4d;
+  --color-party-blue: #4d79ff;
+  --color-party-green: #4dff79;
+  --color-party-yellow: #ffea4d;
+  --color-party-purple: #a64dff;
+  --color-party-orange: #ff8c4d;
+  --color-party-pink: #ff4da6;
+
+  --color-cream: #fff8e7;
+  --color-dark-outline: #1a1a2e;
+  --color-trail: #eaddb8;
+  --color-grass: #c7e8a4;
+  --color-water: #a4d8e8;
+}
+
+html, body {
+  font-family: var(--font-body);
+  background-color: var(--color-cream);
+  color: var(--color-dark-outline);
+}

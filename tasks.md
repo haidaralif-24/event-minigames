@@ -11,7 +11,7 @@ short and everything below assumes you've read them.
       `src/index.css` per the palette direction in `THEME.md`.
 - [ ] Set up Firebase project + Firestore, add `VITE_FIREBASE_*` env vars
       (never hardcode Firebase config).
-- [ ] Basic router with three routes: `/host`, `/play`, `/board`.
+- [x] Basic router with three routes: `/host`, `/play`, `/board`. Root `/` is a login screen requiring `Dadarzz` (`localStorage`); routes redirect to `/` without it.
 
 ## Phase 1 — Content pack system
 Build this before any page hardcodes text, so nothing needs to be ripped
@@ -57,13 +57,13 @@ out later.
       `gameState`.
 
 ## Phase 4 — Question tiles
-- [ ] Wire landing on a question tile to pull a question from the active
+- [x] Wire landing on a question tile to pull a question from the active
       content pack, show it on `/board` and `/play`, resolve correctness
       server-side against `expiresAt` (never trust client timing).
 
 ## Phase 5 — Pre-event checks
 - [ ] Fill the content pack's `questions.json` with a real bank — enough
       questions to comfortably exceed rounds × question-tile landings.
-- [ ] Confirm Firebase env vars are set in Vercel, not just locally.
+- [ ] Confirm Firebase env vars are set in the Firebase project (Hosting + Firestore share the same project), not just locally.
 - [ ] Run the full loop with 2+ devices + 1 projector before the event.
-- [ ] `npm run build` clean.
+- [ ] `npm run build` clean, then deploy with `firebase deploy --only hosting`.

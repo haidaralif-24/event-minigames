@@ -11,7 +11,7 @@
       "*": "allow",
       "rm -rf *": "deny",
       "sudo *": "deny",
-      "vercel --prod": "ask"
+      "firebase deploy*": "ask"
     }
   },
   "mcp": {

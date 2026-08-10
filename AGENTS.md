@@ -36,8 +36,7 @@ file, stop — that logic belongs in a content pack, not the engine.
 ## Tech stack (do not deviate without asking)
 - **Frontend**: Vite + React (NOT Next.js — no SSR/routing needs, keep it simple)
 - **Realtime sync**: Firebase Firestore (`onSnapshot` listeners)
-- **Hosting**: Vercel (static build) — the app needs a stable public HTTPS
-  URL since it runs across multiple devices on venue wifi, not localhost
+- **Hosting**: Firebase Hosting (static `dist/` build) — both hosting and realtime data now live under one Firebase project
 - **Content**: hardcoded JSON per content pack in `src/content/<event-id>/`
   — no database or CMS for content
 - **Styling**: Tailwind CSS + CSS variable theme tokens (see `THEME.md`)
@@ -89,7 +88,7 @@ in `src/data/constants.js`; event branding (title, tagline) belongs in the
 active content pack's `meta.json`, never hardcoded into a page component.
 
 ## Non-goals
-- No auth system beyond a simple team name + optional host PIN.
+- No auth system beyond a simple team name + optional host PIN. Root (`/`) is a login screen requiring the hardcoded host password `Dadarzz` (`localStorage`); `/host`, `/play`, `/board` are guarded and redirect to `/` without it.
 - No question database / CMS — content packs are static JSON.
 - No mobile native app — responsive web app, laptops/projector only.
 - No SSR, no server-side API routes — Firestore is the only backend.
