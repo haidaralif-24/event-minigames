@@ -1,16 +1,12 @@
 [
-  {
-    "id": "q1",
-    "prompt": "What is the capital of France?",
-    "choices": ["Berlin", "Madrid", "Paris", "Rome"],
-    "answerIndex": 2,
-    "sourceRef": "general-knowledge"
-  },
-  {
-    "id": "q2",
-    "prompt": "Which color is the sky?",
-    "choices": ["Green", "Blue", "Red", "Yellow"],
-    "answerIndex": 1,
-    "sourceRef": "observation"
-  }
+  { "id": "q1", "prompt": "What is the capital of France?", "choices": ["Berlin", "Madrid", "Paris", "Rome"], "answerIndex": 2, "sourceRef": "general-knowledge" },
+  { "id": "q2", "prompt": "Which color is the sky?", "choices": ["Green", "Blue", "Red", "Yellow"], "answerIndex": 1, "sourceRef": "observation" },
+  { "id": "q3", "prompt": "How many legs does a spider have?", "choices": ["6", "8", "10", "4"], "answerIndex": 1, "sourceRef": "biology" },
+  { "id": "q4", "prompt": "What is 5 + 7?", "choices": ["10", "11", "12", "13"], "answerIndex": 2, "sourceRef": "math" },
+  { "id": "q5", "prompt": "Which element is H?", "choices": ["Hydrogen", "Helium", "Oxygen", "Nitrogen"], "answerIndex": 0, "sourceRef": "science" },
+  { "id": "q6", "prompt": "Which is a primary color?", "choices": ["Green", "Purple", "Blue", "Orange"], "answerIndex": 2, "sourceRef": "art" },
+  { "id": "q7", "prompt": "How many continents are there?", "choices": ["5", "6", "7", "8"], "answerIndex": 2, "sourceRef": "geography" },
+  { "id": "q8", "prompt": "What is the largest ocean?", "choices": ["Atlantic", "Indian", "Arctic", "Pacific"], "answerIndex": 3, "sourceRef": "geography" },
+  { "id": "q9", "prompt": "Who wrote Romeo and Juliet?", "choices": ["Dickens", "Shakespeare", "Twain", "Austen"], "answerIndex": 1, "sourceRef": "literature" },
+  { "id": "q10", "prompt": "What gas do plants absorb?", "choices": ["Nitrogen", "Oxygen", "Carbon Dioxide", "Methane"], "answerIndex": 2, "sourceRef": "science" }
 ]
