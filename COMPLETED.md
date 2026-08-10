@@ -10,6 +10,7 @@
 - `src/data/constants.js` — `ACTIVE_EVENT`, event imports, team colors
 - `.env` — placeholder `VITE_FIREBASE_*` variables
 - `src/pages/Login.jsx` — root `/` login screen (host password `Dadarzz` via `localStorage`)
+- `src/pages/Host.jsx` — host renders board like spectator (leaderboard/controls deferred)
 - `public/favicon.svg` — favicon
 
 ## Beginner Firebase Tutorial

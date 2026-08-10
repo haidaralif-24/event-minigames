@@ -11,7 +11,7 @@ short and everything below assumes you've read them.
       `src/index.css` per the palette direction in `THEME.md`.
 - [ ] Set up Firebase project + Firestore, add `VITE_FIREBASE_*` env vars
       (never hardcode Firebase config).
-- [x] Basic router with three routes: `/host`, `/play`, `/board`. Root `/` is a login screen requiring `Dadarzz` (`localStorage`); routes redirect to `/` without it.
+- [x] Basic router with three routes: `/host` (host + board view), `/play`, `/board`. Root `/` is a login screen requiring `Dadarzz` (`localStorage`); routes redirect to `/` without it.
 
 ## Phase 1 — Content pack system
 Build this before any page hardcodes text, so nothing needs to be ripped

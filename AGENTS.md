@@ -44,9 +44,7 @@ file, stop — that logic belongs in a content pack, not the engine.
   transitions; see `THEME.md` for the motion feel this needs
 
 ## Roles
-- **Host client** (`/host` route): controls game flow — starts mini-games,
-  advances rounds, resolves dice rolls, reveals question answers. Only
-  privileged writer to `gameState.phase` and `gameState.round`.
+- **Host client** (`/host` route): shows the board like spectator plus controls game flow — starts mini-games, advances rounds, resolves dice rolls, reveals question answers. Only privileged writer to `gameState.phase` and `gameState.round`.
 - **Team client** (`/play` route): team enters a name, joins, plays
   mini-games, submits answers. Never trust team-submitted correctness or
   timing directly — resolve scoring against server-set `expiresAt`
