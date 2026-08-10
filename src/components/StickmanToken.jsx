@@ -4,7 +4,7 @@ export default function StickmanToken({ color = '#ff4d4d', x = 0, y = 0 }) {
   return (
     <motion.div
       className="absolute w-12 h-16 z-20"
-      style={{ left: x - 24, top: y - 32 }}
+      style={{ position: 'absolute', width: 48, height: 64 }}
       animate={{ left: x - 24, top: y - 32 }}
       transition={{ type: 'spring', stiffness: 120, damping: 15 }}
     >

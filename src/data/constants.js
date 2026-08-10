@@ -1,5 +1,5 @@
-import meta from '../content/test-night/meta.json';
-import questions from '../content/test-night/questions.json';
+import meta from '../content/maulid-nabi/meta.json';
+import questions from '../content/maulid-nabi/questions.json';
 
 export const ACTIVE_EVENT = meta.id;
 export const EVENT_META = meta;
