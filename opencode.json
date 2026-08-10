@@ -1,0 +1,54 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    "AGENTS.md"
+  ],
+  "autoupdate": true,
+  "share": "auto",
+  "permission": {
+    "edit": "allow",
+    "bash": {
+      "*": "allow",
+      "rm -rf *": "deny",
+      "sudo *": "deny",
+      "vercel --prod": "ask"
+    }
+  },
+  "mcp": {
+    // added automatically by `npx shadcn@latest mcp init --client opencode`
+    "shadcn": {
+      "type": "local",
+      "command": [
+        "npx",
+        "shadcn@latest",
+        "mcp"
+      ],
+      "enabled": true
+    },
+    "react-bits": {
+      "type": "local",
+      "command": [
+        "npx",
+        "reactbits-dev-mcp-server"
+      ],
+      "enabled": true
+    },
+    "context7": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "enabled": true
+    },
+    "playwright": {
+      "type": "local",
+      "command": [
+        "npx",
+        "@playwright/mcp@latest"
+      ],
+      "enabled": true
+    }
+  }
+}
