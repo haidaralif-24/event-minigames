@@ -1,4 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase';
+import StickmanToken from './StickmanToken.jsx';
 import boardTiles from '../data/boardTiles.json';
 
 // Hand-authored winding path points (S-curve style)
@@ -31,6 +34,17 @@ function interpolatePath(index, total) {
 }
 
 export default function Board() {
+  const [positions, setPositions] = useState({});
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'gameState', 'current'), (snap) => {
+      if (snap.exists() && snap.data().boardPositions) {
+        setPositions(snap.data().boardPositions);
+      }
+    });
+    return unsub;
+  }, []);
+
   const tiles = useMemo(() => {
     return boardTiles.map((tile) => ({
       ...tile,
@@ -58,6 +72,20 @@ export default function Board() {
           strokeDasharray="8 8"
         />
       </svg>
+
+      {/* Team Tokens (6 teams) */}
+      {Object.entries(positions).map(([teamId, tileIndex], idx) => {
+        const colors = ['#ff4d4d', '#4d79ff', '#4dff79', '#ffea4d', '#a64dff', '#ff8c4d'];
+        const tile = tiles[tileIndex] || tiles[0];
+        return (
+          <StickmanToken
+            key={teamId}
+            color={colors[idx % colors.length]}
+            x={tile?.x ?? 80}
+            y={tile?.y ?? 60}
+          />
+        );
+      })}
 
       {/* Tiles */}
       {tiles.map((tile) => (

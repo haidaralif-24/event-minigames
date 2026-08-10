@@ -9,13 +9,18 @@ function RequireHost({ children }) {
   return auth === 'host' ? children : <Navigate to="/" replace />;
 }
 
+function RequireAny({ children }) {
+  const auth = localStorage.getItem('auth');
+  return (auth === 'host' || auth === 'team') ? children : <Navigate to="/" replace />;
+}
+
 function App() {
   return (
     <Routes>
       <Route path="/" element={<LoginPage />} />
       <Route path="/host" element={<RequireHost><HostPage /></RequireHost>} />
       <Route path="/play" element={<RequireHost><PlayPage /></RequireHost>} />
-      <Route path="/board" element={<RequireHost><BoardPage /></RequireHost>} />
+      <Route path="/board" element={<RequireAny><BoardPage /></RequireAny>} />
     </Routes>
   );
 }
