@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { doc, onSnapshot, setDoc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, updateDoc, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase';
 import { RAPID_SHOOTING_QUESTIONS, RAPID_SHOOTING_TIME_LIMIT } from '../data/rapidShootingQuestions.js';
 
 const TEAM_IDS = ['team-1', 'team-2', 'team-3', 'team-4', 'team-5', 'team-6'];
 const FINISH_TILE = 29;
+const SESSION_TIMEOUT_MS = 30000;
 
 export function useGameEngine() {
   const [game, setGame] = useState({
@@ -23,12 +24,57 @@ export function useGameEngine() {
     });
   }, []);
 
-  const joinTeam = useCallback(async (teamId) => {
-    const snap = await getDoc(doc(db, 'gameState', 'current'));
-    if (!snap.exists()) return;
-    const data = snap.data();
-    if (data.phase !== 'lobby' || data.teams?.[teamId]) return;
-    await updateDoc(doc(db, 'gameState', 'current'), { [`teams.${teamId}`]: { joinedAt: Date.now() } });
+  const joinTeam = useCallback(async (teamId, sessionId) => {
+    if (!sessionId || !TEAM_IDS.includes(teamId)) return { ok: false, error: 'Invalid team session.' };
+    const gameRef = doc(db, 'gameState', 'current');
+    const now = Date.now();
+
+    try {
+      const result = await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(gameRef);
+        if (!snap.exists()) return { ok: false, error: 'Game session does not exist.' };
+        const data = snap.data();
+        if (data.phase !== 'lobby') return { ok: false, error: 'The host has already started the game.' };
+
+        const existing = data.teams?.[teamId];
+        const active = existing && existing.sessionId && (now - (existing.lastSeenAt || existing.joinedAt || 0) < SESSION_TIMEOUT_MS);
+
+        if (active && existing.sessionId !== sessionId) {
+          return { ok: false, error: 'This team is already connected on another device or tab.' };
+        }
+
+        transaction.update(gameRef, {
+          [`teams.${teamId}`]: {
+            joinedAt: existing?.joinedAt || now,
+            sessionId,
+            lastSeenAt: now,
+          },
+        });
+        return { ok: true };
+      });
+      return result;
+    } catch (error) {
+      console.error('joinTeam failed:', error);
+      return { ok: false, error: 'Could not join the team right now. Please try again.' };
+    }
+  }, []);
+
+  const touchTeamSession = useCallback(async (teamId, sessionId) => {
+    if (!sessionId || !TEAM_IDS.includes(teamId)) return;
+    try {
+      const gameRef = doc(db, 'gameState', 'current');
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(gameRef);
+        if (!snap.exists()) return;
+        const data = snap.data();
+        const existing = data.teams?.[teamId];
+        if (existing?.sessionId === sessionId) {
+          transaction.update(gameRef, { [`teams.${teamId}.lastSeenAt`]: Date.now() });
+        }
+      });
+    } catch (error) {
+      console.error('team heartbeat failed:', error);
+    }
   }, []);
 
   const startGame = useCallback(async () => {
@@ -125,5 +171,5 @@ export function useGameEngine() {
     }, { merge: true });
   }, [game.boardPositions]);
 
-  return { game, initLobby, joinTeam, startGame, startRapidShooting, submitRapidAnswer, nextRapidQuestion, finishRapidShooting, moveToken, nextTurn };
+  return { game, initLobby, joinTeam, touchTeamSession, startGame, startRapidShooting, submitRapidAnswer, nextRapidQuestion, finishRapidShooting, moveToken, nextTurn };
 }
