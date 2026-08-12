@@ -5,15 +5,15 @@ import BoardPage from './pages/Board.jsx';
 import LoginPage from './pages/Login.jsx';
 
 function RequireHost({ children }) {
-  return localStorage.getItem('auth') === 'host' ? children : <Navigate to="/" replace />;
+  return sessionStorage.getItem('auth') === 'host' ? children : <Navigate to="/" replace />;
 }
 
 function RequireTeam({ children }) {
-  return localStorage.getItem('auth') === 'team' ? children : <Navigate to="/" replace />;
+  return sessionStorage.getItem('auth') === 'team' ? children : <Navigate to="/" replace />;
 }
 
 function RequireAny({ children }) {
-  const auth = localStorage.getItem('auth');
+  const auth = sessionStorage.getItem('auth');
   return (auth === 'host' || auth === 'team') ? children : <Navigate to="/" replace />;
 }
 
