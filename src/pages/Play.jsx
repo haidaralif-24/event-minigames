@@ -8,9 +8,12 @@ const TEAM_LABELS = { 'team-1': 'One', 'team-2': 'Two', 'team-3': 'Three', 'team
 const TARGET_STYLES = ['bg-[#ff4d4d]', 'bg-[#4d79ff]', 'bg-[#4dff79]', 'bg-[#ffea4d]'];
 
 export default function PlayPage() {
-  const { game, joinTeam, submitRapidAnswer, moveToken } = useGameEngine();
-  const myTeamId = localStorage.getItem('team');
+  const { game, joinTeam, touchTeamSession, submitRapidAnswer, moveToken } = useGameEngine();
+  const myTeamId = sessionStorage.getItem('team');
+  const sessionId = sessionStorage.getItem('sessionId');
   const [now, setNow] = useState(Date.now());
+  const [joinError, setJoinError] = useState('');
+  const [joined, setJoined] = useState(false);
 
   useEffect(() => {
     if (game.phase !== 'minigame') return undefined;
@@ -18,7 +21,17 @@ export default function PlayPage() {
     return () => clearInterval(timer);
   }, [game.phase, game.minigame?.questionIndex, game.minigame?.startedAt]);
 
-  if (!myTeamId || myTeamId === 'host') return <div className="min-h-screen bg-[#fff8e7] p-8 text-center"><h1 className="font-display text-3xl mb-6">No team assigned</h1><p>Please log in with a team word (one through six).</p></div>;
+  useEffect(() => {
+    if (!myTeamId || !sessionId || game.phase === 'finished') return undefined;
+    const heartbeat = setInterval(() => touchTeamSession(myTeamId, sessionId), 5000);
+    return () => clearInterval(heartbeat);
+  }, [myTeamId, sessionId, game.phase, touchTeamSession]);
+
+  useEffect(() => {
+    if (game.teams?.[myTeamId]?.sessionId === sessionId) setJoined(true);
+  }, [game.teams, myTeamId, sessionId]);
+
+  if (!myTeamId || !sessionId) return <div className="min-h-screen bg-[#fff8e7] p-8 text-center"><h1 className="font-display text-3xl mb-6">No team assigned</h1><p>Please log in with a team word (one through six).</p></div>;
 
   if (game.phase === 'lobby') return (
     <div className="min-h-screen bg-[#fff8e7] p-8 text-center flex items-center justify-center">
@@ -26,7 +39,19 @@ export default function PlayPage() {
         <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">Team controller</p>
         <h1 className="font-display text-4xl mb-4">Team {TEAM_LABELS[myTeamId]}</h1>
         <p className="text-lg mb-6">Join the lobby, then wait for the host to launch the minigame.</p>
-        <button onClick={() => joinTeam(myTeamId)} className="w-full px-6 py-4 bg-[#4dff79] border-4 border-[#1a1a2e] rounded-xl font-black shadow-md hover:scale-105 transition-transform">Join Lobby</button>
+        {joinError && <p className="mb-5 rounded-xl bg-red-100 px-4 py-3 font-bold text-red-700">{joinError}</p>}
+        <button
+          disabled={joined}
+          onClick={async () => {
+            setJoinError('');
+            const result = await joinTeam(myTeamId, sessionId);
+            if (result?.ok) setJoined(true);
+            else if (result?.error) setJoinError(result.error);
+          }}
+          className="w-full px-6 py-4 bg-[#4dff79] border-4 border-[#1a1a2e] rounded-xl font-black shadow-md hover:scale-105 transition-transform disabled:opacity-60 disabled:hover:scale-100"
+        >
+          {joined ? 'Joined ✓' : 'Join Lobby'}
+        </button>
       </div>
     </div>
   );
