@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+const getSessionId = () => {
+  let sessionId = sessionStorage.getItem('sessionId');
+  if (!sessionId) {
+    sessionId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    sessionStorage.setItem('sessionId', sessionId);
+  }
+  return sessionId;
+};
+
 export default function LoginPage() {
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
@@ -8,24 +17,21 @@ export default function LoginPage() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    setError('');
     const val = input.trim().toLowerCase();
     const teamWords = ['one', 'two', 'three', 'four', 'five', 'six'];
+
+    getSessionId();
+
     if (val === 'dadarzz') {
-      localStorage.setItem('auth', 'host');
-      localStorage.setItem('team', 'host');
-      localStorage.setItem('sessionTeam', 'host');
+      sessionStorage.setItem('auth', 'host');
+      sessionStorage.setItem('team', 'host');
       navigate('/host');
     } else if (teamWords.includes(val)) {
-      const existingSession = localStorage.getItem('sessionTeam');
       const teamNum = teamWords.indexOf(val) + 1;
       const teamId = `team-${teamNum}`;
-      if (existingSession && existingSession !== teamId) {
-        setError(`Team session already active (${existingSession}). One session per team.`);
-        return;
-      }
-      localStorage.setItem('auth', 'team');
-      localStorage.setItem('team', teamId);
-      localStorage.setItem('sessionTeam', teamId);
+      sessionStorage.setItem('auth', 'team');
+      sessionStorage.setItem('team', teamId);
       navigate('/play');
     } else {
       setError('Enter host password Dadarzz, or team word: one through six');
