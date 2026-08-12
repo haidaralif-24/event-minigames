@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { doc, onSnapshot, setDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { RAPID_SHOOTING_QUESTIONS } from '../data/rapidShootingQuestions.js';
+import { RAPID_SHOOTING_QUESTIONS, RAPID_SHOOTING_TIME_LIMIT } from '../data/rapidShootingQuestions.js';
 
 const TEAM_IDS = ['team-1', 'team-2', 'team-3', 'team-4', 'team-5', 'team-6'];
 const FINISH_TILE = 29;
@@ -46,12 +46,14 @@ export function useGameEngine() {
   const startRapidShooting = useCallback(async () => {
     const joined = TEAM_IDS.filter((teamId) => game.teams?.[teamId]);
     if (!joined.length) return;
+    const positions = Object.fromEntries(joined.map((teamId) => [teamId, 0]));
     await updateDoc(doc(db, 'gameState', 'current'), {
-      phase: 'minigame',
+      phase: 'minigame', boardPositions: positions,
       minigame: {
         type: 'rapid-shooting', status: 'playing', questionIndex: 0,
         startedAt: Date.now(), questionCount: RAPID_SHOOTING_QUESTIONS.length,
-        answers: {}, scores: Object.fromEntries(joined.map((teamId) => [teamId, 0])),
+        timeLimit: RAPID_SHOOTING_TIME_LIMIT, answers: {},
+        scores: Object.fromEntries(joined.map((teamId) => [teamId, 0])),
       },
     });
   }, [game.teams]);
@@ -64,11 +66,12 @@ export function useGameEngine() {
     const answeredAt = Date.now();
     const elapsed = Math.max(0, (answeredAt - (game.minigame.startedAt || answeredAt)) / 1000);
     const correct = optionIndex === question.answer;
-    const speedBonus = correct ? Math.max(0, Math.round(50 - elapsed * 4)) : 0;
-    const points = correct ? 100 + speedBonus : 0;
+    const withinTime = elapsed <= RAPID_SHOOTING_TIME_LIMIT;
+    const speedBonus = correct && withinTime ? Math.max(0, Math.round(50 - elapsed * 4)) : 0;
+    const points = correct && withinTime ? 100 + speedBonus : 0;
     const currentScore = game.minigame.scores?.[teamId] || 0;
     await updateDoc(doc(db, 'gameState', 'current'), {
-      [`minigame.answers.${questionIndex}.${teamId}`]: { optionIndex, correct, answeredAt, elapsed: Number(elapsed.toFixed(2)), points },
+      [`minigame.answers.${questionIndex}.${teamId}`]: { optionIndex, correct: correct && withinTime, answeredAt, elapsed: Number(elapsed.toFixed(2)), points },
       [`minigame.scores.${teamId}`]: currentScore + points,
     });
   }, [game]);
@@ -92,8 +95,7 @@ export function useGameEngine() {
     await updateDoc(doc(db, 'gameState', 'current'), {
       phase: 'playing', round: 1, turnOrder, activeTeamIndex: 0,
       activeTeamId: turnOrder[0] || null, rankings: ranked, winner: null,
-      'minigame.status': 'finished',
-      'minigame.finishedAt': Date.now(),
+      'minigame.status': 'finished', 'minigame.finishedAt': Date.now(),
     });
   }, [game.phase, game.minigame]);
 
