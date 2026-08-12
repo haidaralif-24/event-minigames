@@ -46,15 +46,11 @@ out later.
 - [ ] Firestore `gameState` doc wiring for `turnOrder`, `activeTeamId`,
       `boardPositions` per the data model in `AGENTS.md`.
 
-## Phase 3 — Mini-game contract + first mini-games
-- [ ] Write the mini-game contract as a shared doc/skill: every mini-game
-      resolves to `MiniGameResult = { teamId, score }[]`, nothing else
-      talks to board logic about how that ranking was computed.
-- [ ] Build 2–3 mini-games (e.g. reaction-tap, speed-quiz race, one more of
-      your choice). Each is its own component with its own internal state,
-      producing only the `MiniGameResult` shape at the end.
-- [ ] Host-side controls to start a mini-game and collect results into
-      `gameState`.
+## Phase 3 — Turn engine + dice rolling
+- [x] Turn engine (`TurnEngine.jsx`) — lobby, team joining, random turn order, dice rolling per active team, Firestore sync.
+- [x] `Dice.jsx` — roll animation with framer-motion spring easing, fires `onRoll` with value.
+- [x] Team-side dice gating — only active team sees/enables the dice on `/play`.
+- [x] Host-side controls (`HostControls.jsx`) — lobby with Start Game, turn display, Force Next Turn, winner banner with top 3.
 
 ## Phase 4 — Question tiles
 - [x] Wire landing on a question tile to pull a question from the active

@@ -5,8 +5,11 @@ import BoardPage from './pages/Board.jsx';
 import LoginPage from './pages/Login.jsx';
 
 function RequireHost({ children }) {
-  const auth = localStorage.getItem('auth');
-  return auth === 'host' ? children : <Navigate to="/" replace />;
+  return localStorage.getItem('auth') === 'host' ? children : <Navigate to="/" replace />;
+}
+
+function RequireTeam({ children }) {
+  return localStorage.getItem('auth') === 'team' ? children : <Navigate to="/" replace />;
 }
 
 function RequireAny({ children }) {
@@ -19,7 +22,7 @@ function App() {
     <Routes>
       <Route path="/" element={<LoginPage />} />
       <Route path="/host" element={<RequireHost><HostPage /></RequireHost>} />
-      <Route path="/play" element={<RequireHost><PlayPage /></RequireHost>} />
+      <Route path="/play" element={<RequireTeam><PlayPage /></RequireTeam>} />
       <Route path="/board" element={<RequireAny><BoardPage /></RequireAny>} />
     </Routes>
   );

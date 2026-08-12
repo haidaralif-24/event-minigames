@@ -19,8 +19,13 @@
   --color-water: #a4d8e8;
 }
 
-html, body {
+html, body, #root {
   font-family: var(--font-body);
   background-color: var(--color-cream);
   color: var(--color-dark-outline);
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
 }
