@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { doc, onSnapshot, setDoc, updateDoc, runTransaction } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, updateDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, authPersistenceReady, db } from '../firebase';
 import { RAPID_SHOOTING_QUESTIONS, RAPID_SHOOTING_TIME_LIMIT, RAPID_SHOOTING_QUESTION_COUNT } from '../data/rapidShootingQuestions.js';
@@ -97,15 +97,9 @@ export function useGameEngine() {
         const active = existing && existing.sessionId && (now - (existing.lastSeenAt || existing.joinedAt || 0) < SESSION_TIMEOUT_MS);
         if (active && existing.sessionId !== sessionId) return { ok: false, error: 'This team is already connected on another device or tab.' };
         if (existing?.uid && existing.uid !== user.uid) return { ok: false, error: 'This team belongs to another authenticated account.' };
-        transaction.update(gameRef, {
-          [`teams.${teamId}`]: {
-            joinedAt: existing?.joinedAt || now,
-            sessionId,
-            uid: user.uid,
-            email: user.email,
-            lastSeenAt: now,
-          },
-        });
+        transaction.update(gameRef, { [`teams.${teamId}`]: {
+          joinedAt: existing?.joinedAt || now, sessionId, uid: user.uid, email: user.email, lastSeenAt: now,
+        }});
         return { ok: true };
       });
     } catch (error) {
@@ -123,9 +117,7 @@ export function useGameEngine() {
         const snap = await transaction.get(gameRef);
         if (!snap.exists()) return;
         const existing = snap.data().teams?.[teamId];
-        if (existing?.sessionId === sessionId && existing?.uid === user.uid) {
-          transaction.update(gameRef, { [`teams.${teamId}.lastSeenAt`]: Date.now() });
-        }
+        if (existing?.sessionId === sessionId && existing?.uid === user.uid) transaction.update(gameRef, { [`teams.${teamId}.lastSeenAt`]: Date.now() });
       });
     } catch (error) {
       console.error('team heartbeat failed:', error);
@@ -138,26 +130,15 @@ export function useGameEngine() {
     const joined = TEAM_IDS.filter((teamId) => game.teams?.[teamId]);
     if (!joined.length) return;
     const positions = Object.fromEntries(joined.map((teamId) => [teamId, 0]));
-    const questionIds = shuffle(RAPID_SHOOTING_QUESTIONS)
-      .slice(0, RAPID_SHOOTING_QUESTION_COUNT)
-      .map((question) => question.id);
+    const questionIds = shuffle(RAPID_SHOOTING_QUESTIONS).slice(0, RAPID_SHOOTING_QUESTION_COUNT).map((question) => question.id);
 
     await updateDoc(doc(db, 'gameState', 'current'), {
-      phase: 'minigame',
-      boardPositions: positions,
-      turnOrder: [],
-      activeTeamIndex: 0,
-      activeTeamId: null,
+      phase: 'minigame', boardPositions: positions, turnOrder: [], activeTeamIndex: 0, activeTeamId: null,
       dice: { status: 'waiting', value: null, teamId: null, rolledAt: null },
       minigame: {
-        type: 'rapid-shooting',
-        status: 'playing',
-        questionIndex: 0,
-        questionIds,
-        startedAt: Date.now(),
-        questionCount: RAPID_SHOOTING_QUESTION_COUNT,
-        timeLimit: RAPID_SHOOTING_TIME_LIMIT,
-        answers: {},
+        type: 'rapid-shooting', status: 'playing', questionIndex: 0, questionIds,
+        startedAt: serverTimestamp(), questionCount: RAPID_SHOOTING_QUESTION_COUNT,
+        timeLimit: RAPID_SHOOTING_TIME_LIMIT, answers: {},
         scores: Object.fromEntries(joined.map((teamId) => [teamId, 0])),
       },
     });
@@ -174,38 +155,36 @@ export function useGameEngine() {
     try {
       await runTransaction(db, async (transaction) => {
         const snap = await transaction.get(gameRef);
-        if (!snap.exists()) return;
+        if (!snap.exists()) throw new Error('Game state no longer exists.');
         const current = snap.data();
         const minigame = current.minigame;
         if (current.phase !== 'minigame' || minigame?.type !== 'rapid-shooting' || minigame?.status !== 'playing') return;
         const currentIndex = minigame.questionIndex ?? 0;
         const currentQuestion = getRapidQuestion(current, currentIndex);
         if (!currentQuestion || currentIndex !== questionIndex) return;
-        const existingAnswer = minigame.answers?.[currentIndex]?.[teamId];
-        if (existingAnswer) return;
+        if (minigame.answers?.[currentIndex]?.[teamId]) return;
 
+        const startedAt = minigame.startedAt;
+        if (!startedAt || typeof startedAt.toMillis !== 'function') throw new Error('Question timer is still synchronizing. Please try again.');
         const answeredAt = Date.now();
-        const elapsed = Math.max(0, (answeredAt - (minigame.startedAt || answeredAt)) / 1000);
+        const elapsed = Math.max(0, (answeredAt - startedAt.toMillis()) / 1000);
         const correct = optionIndex === currentQuestion.answer;
-        const withinTime = elapsed <= RAPID_SHOOTING_TIME_LIMIT;
+        const withinTime = elapsed <= RAPID_SHOOTING_TIME_LIMIT + 0.25;
         const speedBonus = correct && withinTime ? Math.max(0, Math.round(50 - elapsed * 4)) : 0;
         const points = correct && withinTime ? 100 + speedBonus : 0;
         const currentScore = minigame.scores?.[teamId] || 0;
 
         transaction.update(gameRef, {
           [`minigame.answers.${currentIndex}.${teamId}`]: {
-            uid: user.uid,
-            optionIndex,
-            correct: correct && withinTime,
-            answeredAt,
-            elapsed: Number(elapsed.toFixed(2)),
-            points,
+            uid: user.uid, optionIndex, correct: correct && withinTime,
+            answeredAt, elapsed: Number(elapsed.toFixed(2)), points,
           },
           [`minigame.scores.${teamId}`]: currentScore + points,
         });
       });
     } catch (error) {
       console.error('submitRapidAnswer failed:', error);
+      throw error;
     }
   }, [game]);
 
@@ -215,44 +194,31 @@ export function useGameEngine() {
     if (nextIndex >= RAPID_SHOOTING_QUESTION_COUNT) return;
     await updateDoc(doc(db, 'gameState', 'current'), {
       'minigame.questionIndex': nextIndex,
-      'minigame.startedAt': Date.now(),
+      'minigame.startedAt': serverTimestamp(),
     });
   }, [game.phase, game.minigame]);
 
   const finishRapidShooting = useCallback(async () => {
     if (game.phase !== 'minigame' || game.minigame?.type !== 'rapid-shooting') return;
-    const ranked = Object.entries(game.minigame.scores || {})
+    const ranked = Object.entries(game.minigame.scores || [])
       .sort(([teamA, scoreA], [teamB, scoreB]) => scoreB - scoreA || teamA.localeCompare(teamB))
       .map(([teamId], index) => ({ teamId, position: index + 1 }));
     const turnOrder = ranked.map((ranking) => ranking.teamId);
-
     await updateDoc(doc(db, 'gameState', 'current'), {
-      phase: 'rapid-results',
-      turnOrder,
-      activeTeamIndex: 0,
-      activeTeamId: turnOrder[0] || null,
-      rankings: ranked,
-      winner: null,
-      'minigame.status': 'finished',
-      'minigame.finishedAt': Date.now(),
+      phase: 'rapid-results', turnOrder, activeTeamIndex: 0, activeTeamId: turnOrder[0] || null,
+      rankings: ranked, winner: null, 'minigame.status': 'finished', 'minigame.finishedAt': Date.now(),
     });
   }, [game.phase, game.minigame]);
 
   const advanceToTurnOrder = useCallback(async () => {
     if (game.phase !== 'rapid-results') return;
-    await updateDoc(doc(db, 'gameState', 'current'), {
-      phase: 'turn-order',
-      'minigame.resultsShownAt': Date.now(),
-    });
+    await updateDoc(doc(db, 'gameState', 'current'), { phase: 'turn-order', 'minigame.resultsShownAt': Date.now() });
   }, [game.phase]);
 
   const startBoard = useCallback(async () => {
     if (game.phase !== 'turn-order' || !game.turnOrder?.length) return;
     await updateDoc(doc(db, 'gameState', 'current'), {
-      phase: 'playing',
-      round: 1,
-      activeTeamIndex: 0,
-      activeTeamId: game.turnOrder[0],
+      phase: 'playing', round: 1, activeTeamIndex: 0, activeTeamId: game.turnOrder[0],
       dice: { status: 'waiting', value: null, teamId: game.turnOrder[0], rolledAt: null },
     });
   }, [game.phase, game.turnOrder]);
@@ -260,16 +226,13 @@ export function useGameEngine() {
   const rollDice = useCallback(async (teamId) => {
     const user = auth.currentUser;
     if (!user || game.phase !== 'playing' || game.activeTeamId !== teamId) return;
-
     const gameRef = doc(db, 'gameState', 'current');
     try {
       await runTransaction(db, async (transaction) => {
         const snap = await transaction.get(gameRef);
         if (!snap.exists()) return;
         const current = snap.data();
-        if (current.phase !== 'playing' || current.activeTeamId !== teamId) return;
-        if (current.dice?.status === 'rolling') return;
-
+        if (current.phase !== 'playing' || current.activeTeamId !== teamId || current.dice?.status === 'rolling') return;
         const rollValue = Math.floor(Math.random() * 6) + 1;
         const currentPos = current.boardPositions?.[teamId] ?? 0;
         const newPos = Math.min(currentPos + rollValue, FINISH_TILE);
@@ -277,7 +240,6 @@ export function useGameEngine() {
         const activeIndex = current.activeTeamIndex ?? 0;
         const nextIndex = turnOrder.length ? (activeIndex + 1) % turnOrder.length : 0;
         const reachedFinish = newPos >= FINISH_TILE;
-
         transaction.update(gameRef, {
           [`boardPositions.${teamId}`]: newPos,
           dice: { status: 'rolled', value: rollValue, teamId, rolledAt: Date.now() },
@@ -295,26 +257,9 @@ export function useGameEngine() {
     if (!game.turnOrder?.length) return;
     const nextIndex = (game.activeTeamIndex + 1) % game.turnOrder.length;
     await updateDoc(doc(db, 'gameState', 'current'), {
-      activeTeamIndex: nextIndex,
-      activeTeamId: game.turnOrder[nextIndex],
-      round: nextIndex === 0 ? game.round + 1 : game.round,
+      activeTeamIndex: nextIndex, activeTeamId: game.turnOrder[nextIndex], round: nextIndex === 0 ? game.round + 1 : game.round,
     });
   }, [game.turnOrder, game.activeTeamIndex, game.round]);
 
-  return {
-    game,
-    gameLoaded,
-    gameExists,
-    initLobby,
-    joinTeam,
-    touchTeamSession,
-    startGame,
-    submitRapidAnswer,
-    nextRapidQuestion,
-    finishRapidShooting,
-    advanceToTurnOrder,
-    startBoard,
-    rollDice,
-    nextTurn,
-  };
+  return { game, gameLoaded, gameExists, initLobby, joinTeam, touchTeamSession, startGame, submitRapidAnswer, nextRapidQuestion, finishRapidShooting, advanceToTurnOrder, startBoard, rollDice, nextTurn };
 }
