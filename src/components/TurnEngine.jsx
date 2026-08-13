@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { doc, onSnapshot, setDoc, updateDoc, runTransaction } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, authPersistenceReady, db } from '../firebase';
 import { RAPID_SHOOTING_QUESTIONS, RAPID_SHOOTING_TIME_LIMIT } from '../data/rapidShootingQuestions.js';
 
 const TEAM_IDS = ['team-1', 'team-2', 'team-3', 'team-4', 'team-5', 'team-6'];
@@ -17,15 +18,52 @@ export function useGameEngine() {
   const [gameExists, setGameExists] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(doc(db, 'gameState', 'current'), (snap) => {
-      setGameExists(snap.exists());
-      setGameLoaded(true);
-      if (snap.exists()) setGame(snap.data());
-    }, (error) => {
-      console.error('game state subscription failed:', error);
-      setGameLoaded(true);
-    });
-    return unsubscribe;
+    let unsubscribeSnapshot = () => {};
+    let unsubscribeAuth = () => {};
+    let cancelled = false;
+
+    const startSubscription = (user) => {
+      if (cancelled) return;
+      if (!user) {
+        setGameLoaded(true);
+        setGameExists(false);
+        console.warn('No Firebase user is signed in; Firestore subscription is waiting for authentication.');
+        return;
+      }
+
+      unsubscribeSnapshot();
+      unsubscribeSnapshot = onSnapshot(
+        doc(db, 'gameState', 'current'),
+        (snap) => {
+          if (cancelled) return;
+          setGameExists(snap.exists());
+          setGameLoaded(true);
+          if (snap.exists()) setGame(snap.data());
+        },
+        (error) => {
+          if (cancelled) return;
+          console.error('game state subscription failed:', error);
+          setGameLoaded(true);
+        },
+      );
+    };
+
+    // Wait for Firebase's browser-session persistence to restore the user before
+    // opening a Firestore listener. Production rules require request.auth != null.
+    authPersistenceReady
+      .then(() => {
+        if (!cancelled) unsubscribeAuth = onAuthStateChanged(auth, startSubscription);
+      })
+      .catch((error) => {
+        console.error('Firebase Auth persistence initialization failed:', error);
+        if (!cancelled) unsubscribeAuth = onAuthStateChanged(auth, startSubscription);
+      });
+
+    return () => {
+      cancelled = true;
+      unsubscribeAuth();
+      unsubscribeSnapshot();
+    };
   }, []);
 
   const initLobby = useCallback(async () => {
