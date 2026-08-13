@@ -86,6 +86,49 @@ service cloud.firestore {
         && request.time.toMillis() <= oldMinigame.startedAt + oldMinigame.timeLimit * 1000;
     }
 
+    function canRollOwnTurn() {
+      let oldPosition = resource.data.boardPositions.get(myTeamId(), 0);
+      let newPosition = request.resource.data.boardPositions.get(myTeamId(), 0);
+      let roll = request.resource.data.dice.value;
+      let turnOrder = resource.data.turnOrder;
+      let activeIndex = resource.data.activeTeamIndex;
+      let nextIndex = (activeIndex + 1) % turnOrder.size();
+
+      return isTeam()
+        && resource.data.phase == 'playing'
+        && resource.data.activeTeamId == myTeamId()
+        && request.resource.data.dice.status == 'rolled'
+        && request.resource.data.dice.teamId == myTeamId()
+        && roll >= 1 && roll <= 6
+        && request.resource.data.dice.rolledAt <= request.time.toMillis()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['boardPositions', 'dice', 'activeTeamIndex', 'activeTeamId', 'round'])
+        && request.resource.data.boardPositions.diff(resource.data.boardPositions).affectedKeys().hasOnly([myTeamId()])
+        && newPosition == (oldPosition + roll > 29 ? 29 : oldPosition + roll)
+        && request.resource.data.activeTeamIndex == nextIndex
+        && request.resource.data.activeTeamId == turnOrder[nextIndex]
+        && request.resource.data.round == (nextIndex == 0 ? resource.data.round + 1 : resource.data.round);
+    }
+
+    function canFinishOnDiceRoll() {
+      let oldPosition = resource.data.boardPositions.get(myTeamId(), 0);
+      let newPosition = request.resource.data.boardPositions.get(myTeamId(), 0);
+      let roll = request.resource.data.dice.value;
+
+      return isTeam()
+        && resource.data.phase == 'playing'
+        && resource.data.activeTeamId == myTeamId()
+        && request.resource.data.phase == 'finished'
+        && request.resource.data.winner == myTeamId()
+        && request.resource.data.dice.status == 'rolled'
+        && request.resource.data.dice.teamId == myTeamId()
+        && roll >= 1 && roll <= 6
+        && request.resource.data.dice.rolledAt <= request.time.toMillis()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['boardPositions', 'dice', 'phase', 'winner', 'rankings'])
+        && request.resource.data.boardPositions.diff(resource.data.boardPositions).affectedKeys().hasOnly([myTeamId()])
+        && newPosition == 29
+        && oldPosition + roll >= 29;
+    }
+
     match /gameState/current {
       allow get: if signedIn();
       allow list: if false;
@@ -93,7 +136,9 @@ service cloud.firestore {
       allow update: if isHost()
         || canClaimOwnTeam()
         || canTouchOwnTeam()
-        || (ownsTeamInExistingGame() && onlyOwnRapidAnswerChanged());
+        || (ownsTeamInExistingGame() && onlyOwnRapidAnswerChanged())
+        || canRollOwnTurn()
+        || canFinishOnDiceRoll();
     }
 
     match /{document=**} {
