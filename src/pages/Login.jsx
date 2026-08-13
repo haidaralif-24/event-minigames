@@ -4,13 +4,13 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, authPersistenceReady } from '../firebase';
 
 const ACCOUNTS = {
-  dadarzz: { role: 'host', email: 'host@event-minigames.app', team: 'host', label: 'Host' },
-  one: { role: 'team', email: 'team1@event-minigames.app', team: 'team-1', label: 'Team One' },
-  two: { role: 'team', email: 'team2@event-minigames.app', team: 'team-2', label: 'Team Two' },
-  three: { role: 'team', email: 'team3@event-minigames.app', team: 'team-3', label: 'Team Three' },
-  four: { role: 'team', email: 'team4@event-minigames.app', team: 'team-4', label: 'Team Four' },
-  five: { role: 'team', email: 'team5@event-minigames.app', team: 'team-5', label: 'Team Five' },
-  six: { role: 'team', email: 'team6@event-minigames.app', team: 'team-6', label: 'Team Six' },
+  dadarzz: { role: 'host', email: 'host@event.app', team: 'host', label: 'Host' },
+  one: { role: 'team', email: 'team1@event.app', team: 'team-1', label: 'Team One' },
+  two: { role: 'team', email: 'team2@event.app', team: 'team-2', label: 'Team Two' },
+  three: { role: 'team', email: 'team3@event.app', team: 'team-3', label: 'Team Three' },
+  four: { role: 'team', email: 'team4@event.app', team: 'team-4', label: 'Team Four' },
+  five: { role: 'team', email: 'team5@event.app', team: 'team-5', label: 'Team Five' },
+  six: { role: 'team', email: 'team6@event.app', team: 'team-6', label: 'Team Six' },
 };
 
 function getSessionId() {
