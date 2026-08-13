@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { doc, onSnapshot, setDoc, updateDoc, runTransaction } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, authPersistenceReady, db } from '../firebase';
-import { RAPID_SHOOTING_QUESTIONS, RAPID_SHOOTING_TIME_LIMIT } from '../data/rapidShootingQuestions.js';
+import { RAPID_SHOOTING_QUESTIONS, RAPID_SHOOTING_TIME_LIMIT, RAPID_SHOOTING_QUESTION_COUNT } from '../data/rapidShootingQuestions.js';
 
 const TEAM_IDS = ['team-1', 'team-2', 'team-3', 'team-4', 'team-5', 'team-6'];
 const FINISH_TILE = 29;
@@ -11,6 +11,20 @@ const EMPTY_GAME = {
   phase: 'lobby', round: 1, turnOrder: [], activeTeamIndex: 0, activeTeamId: null,
   boardPositions: {}, teams: {}, winner: null, rankings: [], minigame: null,
 };
+
+function shuffle(items) {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+function getRapidQuestion(game, questionIndex) {
+  const questionId = game.minigame?.questionIds?.[questionIndex];
+  return RAPID_SHOOTING_QUESTIONS.find((question) => question.id === questionId) || null;
+}
 
 export function useGameEngine() {
   const [game, setGame] = useState(EMPTY_GAME);
@@ -30,7 +44,6 @@ export function useGameEngine() {
         console.warn('No Firebase user is signed in; Firestore subscription is waiting for authentication.');
         return;
       }
-
       unsubscribeSnapshot();
       unsubscribeSnapshot = onSnapshot(
         doc(db, 'gameState', 'current'),
@@ -115,57 +128,68 @@ export function useGameEngine() {
     const joined = TEAM_IDS.filter((teamId) => game.teams?.[teamId]);
     if (!joined.length) return;
     const positions = Object.fromEntries(joined.map((teamId) => [teamId, 0]));
+    const questionIds = shuffle(RAPID_SHOOTING_QUESTIONS).slice(0, RAPID_SHOOTING_QUESTION_COUNT).map((question) => question.id);
     await updateDoc(doc(db, 'gameState', 'current'), {
       phase: 'minigame', boardPositions: positions,
-      minigame: { type: 'rapid-shooting', status: 'playing', questionIndex: 0, startedAt: Date.now(),
-        questionCount: RAPID_SHOOTING_QUESTIONS.length, timeLimit: RAPID_SHOOTING_TIME_LIMIT, answers: {},
+      minigame: { type: 'rapid-shooting', status: 'playing', questionIndex: 0, questionIds,
+        startedAt: Date.now(), questionCount: RAPID_SHOOTING_QUESTION_COUNT, timeLimit: RAPID_SHOOTING_TIME_LIMIT, answers: {},
         scores: Object.fromEntries(joined.map((teamId) => [teamId, 0])) },
     });
   }, [game.phase, game.teams]);
-
-  const startRapidShooting = useCallback(async () => {
-    if (!auth.currentUser) throw new Error('You must be signed in as the host.');
-    if (game.phase !== 'lobby' && game.phase !== 'playing') return;
-    const joined = TEAM_IDS.filter((teamId) => game.teams?.[teamId]);
-    if (!joined.length) return;
-    const positions = Object.fromEntries(joined.map((teamId) => [teamId, game.boardPositions?.[teamId] ?? 0]));
-    await updateDoc(doc(db, 'gameState', 'current'), {
-      phase: 'minigame', boardPositions: positions,
-      minigame: { type: 'rapid-shooting', status: 'playing', questionIndex: 0, startedAt: Date.now(),
-        questionCount: RAPID_SHOOTING_QUESTIONS.length, timeLimit: RAPID_SHOOTING_TIME_LIMIT, answers: {},
-        scores: Object.fromEntries(joined.map((teamId) => [teamId, 0])) },
-    });
-  }, [game.phase, game.teams, game.boardPositions]);
 
   const submitRapidAnswer = useCallback(async (teamId, optionIndex) => {
     const user = auth.currentUser;
     if (!user || game.phase !== 'minigame' || game.minigame?.type !== 'rapid-shooting' || game.minigame?.status !== 'playing') return;
     const questionIndex = game.minigame.questionIndex ?? 0;
-    const question = RAPID_SHOOTING_QUESTIONS[questionIndex];
+    const question = getRapidQuestion(game, questionIndex);
     if (!question || game.minigame.answers?.[questionIndex]?.[teamId]) return;
-    const answeredAt = Date.now();
-    const elapsed = Math.max(0, (answeredAt - (game.minigame.startedAt || answeredAt)) / 1000);
-    const correct = optionIndex === question.answer;
-    const withinTime = elapsed <= RAPID_SHOOTING_TIME_LIMIT;
-    const speedBonus = correct && withinTime ? Math.max(0, Math.round(50 - elapsed * 4)) : 0;
-    const points = correct && withinTime ? 100 + speedBonus : 0;
-    const currentScore = game.minigame.scores?.[teamId] || 0;
-    await updateDoc(doc(db, 'gameState', 'current'), {
-      [`minigame.answers.${questionIndex}.${teamId}`]: { uid: user.uid, optionIndex, correct: correct && withinTime, answeredAt, elapsed: Number(elapsed.toFixed(2)), points },
-      [`minigame.scores.${teamId}`]: currentScore + points,
-    });
+
+    const gameRef = doc(db, 'gameState', 'current');
+    try {
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(gameRef);
+        if (!snap.exists()) return;
+        const current = snap.data();
+        const minigame = current.minigame;
+        if (current.phase !== 'minigame' || minigame?.type !== 'rapid-shooting' || minigame?.status !== 'playing') return;
+        const currentIndex = minigame.questionIndex ?? 0;
+        const currentQuestion = getRapidQuestion(current, currentIndex);
+        if (!currentQuestion || currentIndex !== questionIndex) return;
+        const existingAnswer = minigame.answers?.[currentIndex]?.[teamId];
+        if (existingAnswer) return;
+
+        const answeredAt = Date.now();
+        const elapsed = Math.max(0, (answeredAt - (minigame.startedAt || answeredAt)) / 1000);
+        const correct = optionIndex === currentQuestion.answer;
+        const withinTime = elapsed <= RAPID_SHOOTING_TIME_LIMIT;
+        const speedBonus = correct && withinTime ? Math.max(0, Math.round(50 - elapsed * 4)) : 0;
+        const points = correct && withinTime ? 100 + speedBonus : 0;
+        const currentScore = minigame.scores?.[teamId] || 0;
+        transaction.update(gameRef, {
+          [`minigame.answers.${currentIndex}.${teamId}`]: {
+            uid: user.uid, optionIndex, correct: correct && withinTime,
+            answeredAt, elapsed: Number(elapsed.toFixed(2)), points,
+          },
+          [`minigame.scores.${teamId}`]: currentScore + points,
+        });
+      });
+    } catch (error) {
+      console.error('submitRapidAnswer failed:', error);
+    }
   }, [game]);
 
   const nextRapidQuestion = useCallback(async () => {
     if (game.phase !== 'minigame' || game.minigame?.status !== 'playing') return;
     const nextIndex = (game.minigame.questionIndex ?? 0) + 1;
-    if (nextIndex >= RAPID_SHOOTING_QUESTIONS.length) return;
+    if (nextIndex >= RAPID_SHOOTING_QUESTION_COUNT) return;
     await updateDoc(doc(db, 'gameState', 'current'), { 'minigame.questionIndex': nextIndex, 'minigame.startedAt': Date.now() });
   }, [game.phase, game.minigame]);
 
   const finishRapidShooting = useCallback(async () => {
     if (game.phase !== 'minigame' || game.minigame?.type !== 'rapid-shooting') return;
-    const ranked = Object.entries(game.minigame.scores || {}).sort(([, a], [, b]) => b - a || Math.random() - 0.5).map(([teamId], index) => ({ teamId, position: index + 1 }));
+    const ranked = Object.entries(game.minigame.scores || {})
+      .sort(([, a], [, b]) => b - a || Math.random() - 0.5)
+      .map(([teamId], index) => ({ teamId, position: index + 1 }));
     const turnOrder = ranked.map((r) => r.teamId);
     await updateDoc(doc(db, 'gameState', 'current'), {
       phase: 'playing', round: 1, turnOrder, activeTeamIndex: 0, activeTeamId: turnOrder[0] || null, rankings: ranked, winner: null,
@@ -191,5 +215,5 @@ export function useGameEngine() {
     await setDoc(doc(db, 'gameState', 'current'), { phase: 'finished', winner: sorted[0]?.[0] || null, rankings: sorted.map(([teamId], i) => ({ teamId, position: i + 1 })) }, { merge: true });
   }, [game.boardPositions]);
 
-  return { game, gameLoaded, gameExists, initLobby, joinTeam, touchTeamSession, startGame, startRapidShooting, submitRapidAnswer, nextRapidQuestion, finishRapidShooting, moveToken, nextTurn };
+  return { game, gameLoaded, gameExists, initLobby, joinTeam, touchTeamSession, startGame, submitRapidAnswer, nextRapidQuestion, finishRapidShooting, moveToken, nextTurn };
 }
