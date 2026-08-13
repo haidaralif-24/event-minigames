@@ -31,12 +31,16 @@ service cloud.firestore {
     }
 
     function canClaimOwnTeam() {
+      let existingTeam = resource.data.teams.get(myTeamId(), null);
+      let existingLastSeenAt = existingTeam == null ? 0 : existingTeam.get('lastSeenAt', 0);
+      let existingUid = existingTeam == null ? '' : existingTeam.get('uid', '');
       return isTeam()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teams'])
         && request.resource.data.teams.diff(resource.data.teams).affectedKeys().hasOnly([myTeamId()])
         && request.resource.data.teams[myTeamId()].uid == request.auth.uid
-        && (!(myTeamId() in resource.data.teams.keys())
-          || resource.data.teams[myTeamId()].uid == request.auth.uid);
+        && (existingTeam == null
+          || existingUid == request.auth.uid
+          || request.time.toMillis() - existingLastSeenAt >= 30000);
     }
 
     function canTouchOwnTeam() {
