@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useGameEngine } from '../components/TurnEngine.jsx';
-import Dice from '../components/Dice.jsx';
-import Board from '../components/Board.jsx';
 import { RAPID_SHOOTING_QUESTIONS, RAPID_SHOOTING_TIME_LIMIT } from '../data/rapidShootingQuestions.js';
 
 const TEAM_LABELS = { 'team-1': 'One', 'team-2': 'Two', 'team-3': 'Three', 'team-4': 'Four', 'team-5': 'Five', 'team-6': 'Six' };
@@ -38,7 +36,7 @@ export default function PlayPage() {
       <div className="bg-white border-4 border-[#1a1a2e] rounded-3xl p-8 shadow-xl max-w-md w-full">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">Team controller</p>
         <h1 className="font-display text-4xl mb-4">Team {TEAM_LABELS[myTeamId]}</h1>
-        <p className="text-lg mb-6">Join the lobby, then wait for the host to launch the minigame.</p>
+        <p className="text-lg mb-6">Join the lobby, then wait for the host to start the game.</p>
         {joinError && <p className="mb-5 rounded-xl bg-red-100 px-4 py-3 font-bold text-red-700">{joinError}</p>}
         <button
           disabled={joined}
@@ -58,21 +56,25 @@ export default function PlayPage() {
 
   if (game.phase === 'minigame' && game.minigame?.type === 'rapid-shooting') {
     const questionIndex = game.minigame.questionIndex ?? 0;
-    const question = RAPID_SHOOTING_QUESTIONS[questionIndex];
+    const questionId = game.minigame.questionIds?.[questionIndex];
+    const question = RAPID_SHOOTING_QUESTIONS.find((item) => item.id === questionId);
+    const questionCount = game.minigame.questionCount ?? game.minigame.questionIds?.length ?? 5;
     const myAnswer = game.minigame.answers?.[questionIndex]?.[myTeamId];
     const elapsed = Math.max(0, (now - (game.minigame.startedAt || now)) / 1000);
     const timeLeft = Math.max(0, RAPID_SHOOTING_TIME_LIMIT - elapsed);
     const locked = Boolean(myAnswer) || timeLeft <= 0;
 
+    if (!question) return <div className="min-h-screen bg-[#101827] p-8 text-white flex items-center justify-center"><p className="font-black">Loading question…</p></div>;
+
     return (
       <div className="min-h-screen bg-[#101827] p-5 text-white flex items-center justify-center">
         <main className="w-full max-w-3xl">
           <header className="mb-5 flex items-center justify-between gap-4">
-            <div><p className="text-xs font-black uppercase tracking-[0.2em] text-[#ff8c4d]">Rapid Shooting</p><h1 className="font-display text-3xl">Team {TEAM_LABELS[myTeamId]}</h1></div>
+            <div><p className="text-xs font-black uppercase tracking-[0.2em] text-[#ff8c4d]">Rapid Shooting • Dice Order</p><h1 className="font-display text-3xl">Team {TEAM_LABELS[myTeamId]}</h1></div>
             <div className={`rounded-2xl border-4 border-white/20 px-4 py-2 text-center ${timeLeft <= 3 ? 'bg-[#ff4d4d]' : 'bg-white/10'}`}><p className="text-[10px] font-black uppercase tracking-widest opacity-70">Time</p><p className="text-2xl font-black tabular-nums">{timeLeft.toFixed(1)}s</p></div>
           </header>
           <section className="rounded-[2rem] border-4 border-white/15 bg-[#f7f2df] p-6 text-[#18233f] shadow-2xl">
-            <div className="mb-5 flex items-center justify-between"><span className="rounded-full bg-[#18233f] px-3 py-1 text-xs font-black text-white">Q{questionIndex + 1} / {RAPID_SHOOTING_QUESTIONS.length}</span><span className="font-black text-[#ff4d4d]">{game.minigame.scores?.[myTeamId] || 0} pts</span></div>
+            <div className="mb-5 flex items-center justify-between"><span className="rounded-full bg-[#18233f] px-3 py-1 text-xs font-black text-white">Q{questionIndex + 1} / {questionCount}</span><span className="font-black text-[#ff4d4d]">{game.minigame.scores?.[myTeamId] || 0} pts</span></div>
             <h2 className="mb-7 text-center text-2xl md:text-4xl font-black leading-tight">{question.question}</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {question.options.map((option, index) => {
