@@ -30,15 +30,19 @@ service cloud.firestore {
         request.auth.token.email == 'team6@event-minigames.app' ? 'team-6' : '';
     }
 
-    function ownsTeamInExistingGame() {
+    function canClaimOwnTeam() {
       return isTeam()
-        && resource.data.get(['teams', myTeamId(), 'uid'], '') == request.auth.uid;
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teams'])
+        && request.resource.data.teams.diff(resource.data.teams).affectedKeys().hasOnly([myTeamId()])
+        && request.resource.data.teams[myTeamId()].uid == request.auth.uid
+        && (!myTeamId() in resource.data.teams.keys()
+          || resource.data.teams[myTeamId()].uid == request.auth.uid);
     }
 
-    function onlyOwnTeamChanged() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teams'])
-        && request.resource.data.teams.diff(resource.data.teams).affectedKeys().hasOnly([myTeamId()])
-        && request.resource.data.teams[myTeamId()].uid == request.auth.uid;
+    function ownsTeamInExistingGame() {
+      return isTeam()
+        && myTeamId() in resource.data.teams.keys()
+        && resource.data.teams[myTeamId()].uid == request.auth.uid;
     }
 
     function onlyOwnRapidAnswerChanged() {
@@ -61,15 +65,12 @@ service cloud.firestore {
     match /gameState/current {
       allow get: if signedIn();
       allow list: if false;
-
-      // The host owns authoritative game-state transitions.
       allow create, delete: if isHost();
       allow update: if isHost()
-        || (ownsTeamInExistingGame() && onlyOwnTeamChanged())
+        || canClaimOwnTeam()
         || (ownsTeamInExistingGame() && onlyOwnRapidAnswerChanged());
     }
 
-    // Default deny for anything not explicitly modeled above.
     match /{document=**} {
       allow read, write: if false;
     }
