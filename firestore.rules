@@ -1,0 +1,77 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isHost() {
+      return signedIn() && request.auth.token.email == 'host@event-minigames.app';
+    }
+
+    function isTeam() {
+      return signedIn() && request.auth.token.email in [
+        'team1@event-minigames.app',
+        'team2@event-minigames.app',
+        'team3@event-minigames.app',
+        'team4@event-minigames.app',
+        'team5@event-minigames.app',
+        'team6@event-minigames.app'
+      ];
+    }
+
+    function myTeamId() {
+      return request.auth.token.email == 'team1@event-minigames.app' ? 'team-1' :
+        request.auth.token.email == 'team2@event-minigames.app' ? 'team-2' :
+        request.auth.token.email == 'team3@event-minigames.app' ? 'team-3' :
+        request.auth.token.email == 'team4@event-minigames.app' ? 'team-4' :
+        request.auth.token.email == 'team5@event-minigames.app' ? 'team-5' :
+        request.auth.token.email == 'team6@event-minigames.app' ? 'team-6' : '';
+    }
+
+    function ownsTeamInExistingGame() {
+      return isTeam()
+        && resource.data.get(['teams', myTeamId(), 'uid'], '') == request.auth.uid;
+    }
+
+    function onlyOwnTeamChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teams'])
+        && request.resource.data.teams.diff(resource.data.teams).affectedKeys().hasOnly([myTeamId()])
+        && request.resource.data.teams[myTeamId()].uid == request.auth.uid;
+    }
+
+    function onlyOwnRapidAnswerChanged() {
+      let oldMinigame = resource.data.minigame;
+      let newMinigame = request.resource.data.minigame;
+      let questionIndex = oldMinigame.questionIndex;
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['minigame'])
+        && newMinigame.type == 'rapid-shooting'
+        && newMinigame.status == 'playing'
+        && newMinigame.questionIndex == oldMinigame.questionIndex
+        && newMinigame.startedAt == oldMinigame.startedAt
+        && newMinigame.timeLimit == oldMinigame.timeLimit
+        && newMinigame.questionCount == oldMinigame.questionCount
+        && newMinigame.scores.diff(oldMinigame.scores).affectedKeys().hasOnly([myTeamId()])
+        && newMinigame.answers.diff(oldMinigame.answers).affectedKeys().hasOnly([questionIndex])
+        && newMinigame.answers[questionIndex].diff(oldMinigame.answers[questionIndex]).affectedKeys().hasOnly([myTeamId()])
+        && newMinigame.answers[questionIndex][myTeamId()].uid == request.auth.uid;
+    }
+
+    match /gameState/current {
+      allow get: if signedIn();
+      allow list: if false;
+
+      // The host owns authoritative game-state transitions.
+      allow create, delete: if isHost();
+      allow update: if isHost()
+        || (ownsTeamInExistingGame() && onlyOwnTeamChanged())
+        || (ownsTeamInExistingGame() && onlyOwnRapidAnswerChanged());
+    }
+
+    // Default deny for anything not explicitly modeled above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
