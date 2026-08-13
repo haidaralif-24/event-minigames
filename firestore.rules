@@ -12,12 +12,8 @@ service cloud.firestore {
 
     function isTeam() {
       return signedIn() && request.auth.token.email in [
-        'team1@event.app',
-        'team2@event.app',
-        'team3@event.app',
-        'team4@event.app',
-        'team5@event.app',
-        'team6@event.app'
+        'team1@event.app', 'team2@event.app', 'team3@event.app',
+        'team4@event.app', 'team5@event.app', 'team6@event.app'
       ];
     }
 
@@ -38,9 +34,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teams'])
         && request.resource.data.teams.diff(resource.data.teams).affectedKeys().hasOnly([myTeamId()])
         && request.resource.data.teams[myTeamId()].uid == request.auth.uid
-        && (existingTeam == null
-          || existingUid == request.auth.uid
-          || request.time.toMillis() - existingLastSeenAt >= 30000);
+        && (existingTeam == null || existingUid == request.auth.uid || request.time.toMillis() - existingLastSeenAt >= 30000);
     }
 
     function canTouchOwnTeam() {
@@ -63,17 +57,33 @@ service cloud.firestore {
       let oldMinigame = resource.data.minigame;
       let newMinigame = request.resource.data.minigame;
       let questionIndex = oldMinigame.questionIndex;
+      let oldAnswersForQuestion = oldMinigame.answers.get(questionIndex, {});
+      let newAnswersForQuestion = newMinigame.answers.get(questionIndex, {});
+      let answer = newAnswersForQuestion[myTeamId()];
+      let oldScore = oldMinigame.scores.get(myTeamId(), 0);
+      let newScore = newMinigame.scores.get(myTeamId(), 0);
+
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['minigame'])
         && newMinigame.type == 'rapid-shooting'
         && newMinigame.status == 'playing'
-        && newMinigame.questionIndex == oldMinigame.questionIndex
+        && newMinigame.questionCount == 5
+        && newMinigame.questionIds.size() == 5
+        && newMinigame.questionIds == oldMinigame.questionIds
+        && newMinigame.questionIndex == questionIndex
         && newMinigame.startedAt == oldMinigame.startedAt
         && newMinigame.timeLimit == oldMinigame.timeLimit
         && newMinigame.questionCount == oldMinigame.questionCount
         && newMinigame.scores.diff(oldMinigame.scores).affectedKeys().hasOnly([myTeamId()])
-        && newMinigame.answers.diff(oldMinigame.answers).affectedKeys().hasOnly([questionIndex])
-        && newMinigame.answers[questionIndex].diff(oldMinigame.answers[questionIndex]).affectedKeys().hasOnly([myTeamId()])
-        && newMinigame.answers[questionIndex][myTeamId()].uid == request.auth.uid;
+        && newAnswersForQuestion.diff(oldAnswersForQuestion).affectedKeys().hasOnly([myTeamId()])
+        && !(myTeamId() in oldAnswersForQuestion.keys())
+        && myTeamId() in newAnswersForQuestion.keys()
+        && answer.uid == request.auth.uid
+        && answer.optionIndex >= 0
+        && answer.optionIndex <= 3
+        && answer.points >= 0
+        && answer.points <= 150
+        && newScore == oldScore + answer.points
+        && request.time.toMillis() <= oldMinigame.startedAt + oldMinigame.timeLimit * 1000;
     }
 
     match /gameState/current {
