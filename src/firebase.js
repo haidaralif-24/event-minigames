@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { getAuth, setPersistence, browserSessionPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -11,4 +12,9 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// Keep Firebase Auth isolated per browser tab so one local testing tab does not
+// silently become the same authenticated user as another tab.
+export const authPersistenceReady = setPersistence(auth, browserSessionPersistence);
