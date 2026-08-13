@@ -10,3 +10,4 @@ export const RAPID_SHOOTING_QUESTIONS = [
 ];
 
 export const RAPID_SHOOTING_TIME_LIMIT = 12;
+export const RAPID_SHOOTING_QUESTION_COUNT = 5;
