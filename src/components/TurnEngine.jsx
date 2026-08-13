@@ -48,8 +48,6 @@ export function useGameEngine() {
       );
     };
 
-    // Wait for Firebase's browser-session persistence to restore the user before
-    // opening a Firestore listener. Production rules require request.auth != null.
     authPersistenceReady
       .then(() => {
         if (!cancelled) unsubscribeAuth = onAuthStateChanged(auth, startSubscription);
@@ -116,11 +114,12 @@ export function useGameEngine() {
     if (game.phase !== 'lobby') return;
     const joined = TEAM_IDS.filter((teamId) => game.teams?.[teamId]);
     if (!joined.length) return;
-    const shuffled = [...joined].sort(() => Math.random() - 0.5);
     const positions = Object.fromEntries(joined.map((teamId) => [teamId, 0]));
-    await setDoc(doc(db, 'gameState', 'current'), {
-      phase: 'playing', round: 1, turnOrder: shuffled, activeTeamIndex: 0, activeTeamId: shuffled[0],
-      boardPositions: positions, teams: game.teams, winner: null, rankings: [], minigame: null,
+    await updateDoc(doc(db, 'gameState', 'current'), {
+      phase: 'minigame', boardPositions: positions,
+      minigame: { type: 'rapid-shooting', status: 'playing', questionIndex: 0, startedAt: Date.now(),
+        questionCount: RAPID_SHOOTING_QUESTIONS.length, timeLimit: RAPID_SHOOTING_TIME_LIMIT, answers: {},
+        scores: Object.fromEntries(joined.map((teamId) => [teamId, 0])) },
     });
   }, [game.phase, game.teams]);
 
