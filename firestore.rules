@@ -35,8 +35,18 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teams'])
         && request.resource.data.teams.diff(resource.data.teams).affectedKeys().hasOnly([myTeamId()])
         && request.resource.data.teams[myTeamId()].uid == request.auth.uid
-        && (!myTeamId() in resource.data.teams.keys()
+        && (!(myTeamId() in resource.data.teams.keys())
           || resource.data.teams[myTeamId()].uid == request.auth.uid);
+    }
+
+    function canTouchOwnTeam() {
+      return isTeam()
+        && myTeamId() in resource.data.teams.keys()
+        && resource.data.teams[myTeamId()].uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teams'])
+        && request.resource.data.teams.diff(resource.data.teams).affectedKeys().hasOnly([myTeamId()])
+        && request.resource.data.teams[myTeamId()].uid == request.auth.uid
+        && request.resource.data.teams[myTeamId()].sessionId == resource.data.teams[myTeamId()].sessionId;
     }
 
     function ownsTeamInExistingGame() {
@@ -68,6 +78,7 @@ service cloud.firestore {
       allow create, delete: if isHost();
       allow update: if isHost()
         || canClaimOwnTeam()
+        || canTouchOwnTeam()
         || (ownsTeamInExistingGame() && onlyOwnRapidAnswerChanged());
     }
 
