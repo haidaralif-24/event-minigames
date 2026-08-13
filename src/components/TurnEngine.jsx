@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { doc, onSnapshot, setDoc, updateDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, updateDoc, runTransaction, Timestamp } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, authPersistenceReady, db } from '../firebase';
 import { RAPID_SHOOTING_QUESTIONS, RAPID_SHOOTING_TIME_LIMIT, RAPID_SHOOTING_QUESTION_COUNT } from '../data/rapidShootingQuestions.js';
@@ -137,7 +137,7 @@ export function useGameEngine() {
       dice: { status: 'waiting', value: null, teamId: null, rolledAt: null },
       minigame: {
         type: 'rapid-shooting', status: 'playing', questionIndex: 0, questionIds,
-        startedAt: serverTimestamp(), questionCount: RAPID_SHOOTING_QUESTION_COUNT,
+        startedAt: Timestamp.now(), questionCount: RAPID_SHOOTING_QUESTION_COUNT,
         timeLimit: RAPID_SHOOTING_TIME_LIMIT, answers: {},
         scores: Object.fromEntries(joined.map((teamId) => [teamId, 0])),
       },
@@ -194,7 +194,7 @@ export function useGameEngine() {
     if (nextIndex >= RAPID_SHOOTING_QUESTION_COUNT) return;
     await updateDoc(doc(db, 'gameState', 'current'), {
       'minigame.questionIndex': nextIndex,
-      'minigame.startedAt': serverTimestamp(),
+      'minigame.startedAt': Timestamp.now(),
     });
   }, [game.phase, game.minigame]);
 
