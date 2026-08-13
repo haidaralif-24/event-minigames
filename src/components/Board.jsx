@@ -4,21 +4,21 @@ import { db } from '../firebase';
 import boardTiles from '../data/boardTiles.json';
 
 const TOTAL_TILES = 68;
-const MAP_WIDTH = 1120;
-const MAP_HEIGHT = 650;
+const MAP_WIDTH = 2240;
+const MAP_HEIGHT = 1300;
 const MIN_ZOOM = 0.85;
 const MAX_ZOOM = 3.2;
 
 const PATH_POINTS = [
-  { x: 90, y: 500 }, { x: 125, y: 420 }, { x: 105, y: 330 },
-  { x: 155, y: 250 }, { x: 235, y: 205 }, { x: 330, y: 220 },
-  { x: 395, y: 285 }, { x: 420, y: 375 }, { x: 390, y: 460 },
-  { x: 455, y: 525 }, { x: 555, y: 535 }, { x: 650, y: 505 },
-  { x: 720, y: 440 }, { x: 735, y: 350 }, { x: 705, y: 270 },
-  { x: 650, y: 210 }, { x: 700, y: 140 }, { x: 795, y: 105 },
-  { x: 890, y: 130 }, { x: 955, y: 190 }, { x: 970, y: 275 },
-  { x: 940, y: 350 }, { x: 975, y: 425 }, { x: 1030, y: 500 },
-  { x: 1080, y: 565 },
+  { x: 180, y: 1000 }, { x: 250, y: 840 }, { x: 210, y: 660 },
+  { x: 310, y: 500 }, { x: 470, y: 410 }, { x: 660, y: 440 },
+  { x: 790, y: 570 }, { x: 840, y: 750 }, { x: 780, y: 920 },
+  { x: 910, y: 1050 }, { x: 1110, y: 1070 }, { x: 1300, y: 1010 },
+  { x: 1440, y: 880 }, { x: 1470, y: 700 }, { x: 1410, y: 540 },
+  { x: 1300, y: 420 }, { x: 1400, y: 280 }, { x: 1590, y: 210 },
+  { x: 1780, y: 260 }, { x: 1910, y: 380 }, { x: 1940, y: 550 },
+  { x: 1880, y: 700 }, { x: 1950, y: 850 }, { x: 2060, y: 1000 },
+  { x: 2160, y: 1130 },
 ];
 
 function buildPath(points) {
@@ -225,34 +225,36 @@ export default function Board() {
           <rect width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#meadow)" />
           <rect width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#grassTexture)" />
 
-          <path d="M185 220C235 170 350 180 390 245C420 295 390 360 330 385C255 415 170 370 165 305C160 270 170 240 185 220Z" fill="#236f82" opacity=".3" />
-          <path d="M195 215C245 180 340 190 375 245C400 285 375 345 325 370C265 395 185 355 180 300C177 265 182 235 195 215Z" fill="url(#water)" stroke="#397987" strokeWidth="7" />
-          <path d="M395 155C430 205 425 250 410 300C395 350 420 395 470 430C515 462 550 470 605 480" fill="none" stroke="#216f83" strokeWidth="36" opacity=".35" />
-          <path d="M395 155C430 205 425 250 410 300C395 350 420 395 470 430C515 462 550 470 605 480" fill="none" stroke="url(#water)" strokeWidth="25" strokeLinecap="round" />
-          <path d="M230 255c28-13 55-14 82-3M250 325c25-10 48-10 69-2M415 210c10 17 12 34 6 51M440 375c16 17 28 26 45 34" fill="none" stroke="#c1f3f0" strokeWidth="4" strokeLinecap="round" opacity=".7" />
-          <ellipse cx="255" cy="250" rx="16" ry="8" fill="#78b85a" transform="rotate(-15 255 250)" />
-          <ellipse cx="335" cy="320" rx="13" ry="7" fill="#78b85a" transform="rotate(20 335 320)" />
+          <g transform="scale(2)">
+            <path d="M185 220C235 170 350 180 390 245C420 295 390 360 330 385C255 415 170 370 165 305C160 270 170 240 185 220Z" fill="#236f82" opacity=".3" />
+            <path d="M195 215C245 180 340 190 375 245C400 285 375 345 325 370C265 395 185 355 180 300C177 265 182 235 195 215Z" fill="url(#water)" stroke="#397987" strokeWidth="7" />
+            <path d="M395 155C430 205 425 250 410 300C395 350 420 395 470 430C515 462 550 470 605 480" fill="none" stroke="#216f83" strokeWidth="36" opacity=".35" />
+            <path d="M395 155C430 205 425 250 410 300C395 350 420 395 470 430C515 462 550 470 605 480" fill="none" stroke="url(#water)" strokeWidth="25" strokeLinecap="round" />
+            <path d="M230 255c28-13 55-14 82-3M250 325c25-10 48-10 69-2M415 210c10 17 12 34 6 51M440 375c16 17 28 26 45 34" fill="none" stroke="#c1f3f0" strokeWidth="4" strokeLinecap="round" opacity=".7" />
+            <ellipse cx="255" cy="250" rx="16" ry="8" fill="#78b85a" transform="rotate(-15 255 250)" />
+            <ellipse cx="335" cy="320" rx="13" ry="7" fill="#78b85a" transform="rotate(20 335 320)" />
 
-          <g transform="translate(415 300)"><rect x="-28" y="-17" width="56" height="34" rx="6" fill="#8a5a32" stroke="#5e3d25" strokeWidth="3" /><path d="M-21-10h42M-21 0h42M-21 10h42" stroke="#c38a4c" strokeWidth="5" /><path d="M-29-20h58M-29 20h58" stroke="#654127" strokeWidth="5" /></g>
+            <g transform="translate(415 300)"><rect x="-28" y="-17" width="56" height="34" rx="6" fill="#8a5a32" stroke="#5e3d25" strokeWidth="3" /><path d="M-21-10h42M-21 0h42M-21 10h42" stroke="#c38a4c" strokeWidth="5" /><path d="M-29-20h58M-29 20h58" stroke="#654127" strokeWidth="5" /></g>
+          </g>
 
-          <Tree x={65} y={100} scale={1.1} /><Tree x={145} y={85} scale={.8} /><Tree x={365} y={90} scale={.9} />
-          <Tree x={510} y={75} scale={1.1} /><Tree x={625} y={95} scale={.9} /><Tree x={675} y={455} scale={1.1} />
-          <Tree x={805} y={515} scale={1.05} /><Tree x={880} y={80} scale={.85} /><Tree x={1030} y={135} scale={1.1} />
-          <Tree x={1080} y={360} scale={.9} /><Tree x={75} y={450} scale={.85} /><Tree x={350} y={550} /><Tree x={900} y={585} />
-          <Bush x={515} y={125} scale={.8} /><Bush x={625} y={235} /><Bush x={715} y={315} scale={.8} />
-          <Bush x={540} y={555} /><Bush x={1010} y={250} scale={.8} /><Bush x={160} y={430} /><Bush x={930} y={470} />
-          <Rock x={280} y={120} /><Rock x={530} y={180} scale={.8} /><Rock x={825} y={430} /><Rock x={460} y={580} scale={.8} />
-          <Flower x={135} y={155} /><Flower x={300} y={155} /><Flower x={480} y={130} /><Flower x={610} y={410} /><Flower x={770} y={520} /><Flower x={920} y={90} />
+          <Tree x={130} y={200} scale={2.2} /><Tree x={290} y={170} scale={1.6} /><Tree x={730} y={180} scale={1.8} />
+          <Tree x={1020} y={150} scale={2.2} /><Tree x={1250} y={190} scale={1.8} /><Tree x={1350} y={910} scale={2.2} />
+          <Tree x={1610} y={1030} scale={2.1} /><Tree x={1760} y={160} scale={1.7} /><Tree x={2060} y={270} scale={2.2} />
+          <Tree x={2160} y={720} scale={1.8} /><Tree x={150} y={900} scale={1.7} /><Tree x={700} y={1100} scale={2} /><Tree x={1800} y={1170} scale={2} />
+          <Bush x={1030} y={250} scale={1.6} /><Bush x={1250} y={470} scale={2} /><Bush x={1430} y={630} scale={1.6} />
+          <Bush x={1080} y={1110} scale={2} /><Bush x={2020} y={500} scale={1.6} /><Bush x={320} y={860} scale={2} /><Bush x={1860} y={940} scale={2} />
+          <Rock x={560} y={240} scale={2} /><Rock x={1060} y={360} scale={1.6} /><Rock x={1650} y={860} scale={2} /><Rock x={920} y={1160} scale={1.6} />
+          <Flower x={270} y={310} /><Flower x={600} y={310} /><Flower x={960} y={260} /><Flower x={1220} y={820} /><Flower x={1540} y={1040} /><Flower x={1840} y={180} />
 
           <path d={trailPath} fill="none" stroke="#8b6b38" strokeWidth="34" strokeLinecap="round" strokeLinejoin="round" opacity=".32" />
           <path d={trailPath} fill="none" stroke="url(#trail)" strokeWidth="26" strokeLinecap="round" strokeLinejoin="round" />
           <path d={trailPath} fill="none" stroke="#f5dfad" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="2 22" opacity=".9" />
 
           {tiles.map((tile) => (
-            <g key={tile.index} transform={`translate(${tile.x - 25} ${tile.y - 25})`} filter="url(#tileShadow)">
-              <circle cx="25" cy="25" r="25" fill={tile.type === 'start' ? '#45f27b' : tile.type === 'finish' ? '#ff5555' : '#fffdf5'} stroke="#18233f" strokeWidth="4" />
-              <circle cx="25" cy="25" r="20" fill="none" stroke="#ffffff" strokeWidth="2" opacity=".7" />
-              <text x="25" y="30" textAnchor="middle" fontSize="14" fontWeight="900" fill="#18233f" fontFamily="system-ui, sans-serif">{tile.index + 1}</text>
+            <g key={tile.index} transform={`translate(${tile.x - 18} ${tile.y - 18})`} filter="url(#tileShadow)">
+              <circle cx="18" cy="18" r="18" fill={tile.type === 'start' ? '#45f27b' : tile.type === 'finish' ? '#ff5555' : '#fffdf5'} stroke="#18233f" strokeWidth="3" />
+              <circle cx="18" cy="18" r="14" fill="none" stroke="#ffffff" strokeWidth="2" opacity=".7" />
+              <text x="18" y="22" textAnchor="middle" fontSize="11" fontWeight="900" fill="#18233f" fontFamily="system-ui, sans-serif">{tile.index + 1}</text>
             </g>
           ))}
 
@@ -261,10 +263,10 @@ export default function Board() {
 
           {Object.entries(positions).map(([teamId, tileIndex], idx) => {
             const tile = tiles[tileIndex] || tiles[0];
-            return <g key={teamId} transform={`translate(${tile.x - 18} ${tile.y - 36})`}>
-              <circle cx="18" cy="13" r="10" fill={colors[idx % colors.length]} stroke="#18233f" strokeWidth="3" />
-              <circle cx="18" cy="13" r="4" fill="#fff" opacity=".8" />
-              <path d="M18 25v17M8 33h20M18 42l-9 9M18 42l9 9" stroke="#18233f" strokeWidth="3" strokeLinecap="round" />
+            return <g key={teamId} transform={`translate(${tile.x - 13} ${tile.y - 26})`}>
+              <circle cx="13" cy="9" r="8" fill={colors[idx % colors.length]} stroke="#18233f" strokeWidth="2.5" />
+              <circle cx="13" cy="9" r="3" fill="#fff" opacity=".8" />
+              <path d="M13 18v13M5 24h16M13 31l-7 7M13 31l7 7" stroke="#18233f" strokeWidth="2.5" strokeLinecap="round" />
             </g>;
           })}
         </svg>
