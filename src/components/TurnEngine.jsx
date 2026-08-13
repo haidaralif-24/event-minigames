@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { doc, onSnapshot, setDoc, updateDoc, runTransaction } from 'firebase/firestore';
-import { db } from '../firebase';
+import { auth, db } from '../firebase';
 import { RAPID_SHOOTING_QUESTIONS, RAPID_SHOOTING_TIME_LIMIT } from '../data/rapidShootingQuestions.js';
 
 const TEAM_IDS = ['team-1', 'team-2', 'team-3', 'team-4', 'team-5', 'team-6'];
@@ -18,6 +18,7 @@ export function useGameEngine() {
   }), []);
 
   const initLobby = useCallback(async () => {
+    if (!auth.currentUser) throw new Error('You must be signed in as the host.');
     await setDoc(doc(db, 'gameState', 'current'), {
       phase: 'lobby', round: 1, turnOrder: [], activeTeamIndex: 0, activeTeamId: null,
       boardPositions: {}, teams: {}, winner: null, rankings: [], minigame: null,
@@ -25,7 +26,8 @@ export function useGameEngine() {
   }, []);
 
   const joinTeam = useCallback(async (teamId, sessionId) => {
-    if (!sessionId || !TEAM_IDS.includes(teamId)) return { ok: false, error: 'Invalid team session.' };
+    const user = auth.currentUser;
+    if (!user || !sessionId || !TEAM_IDS.includes(teamId)) return { ok: false, error: 'Invalid authenticated team session.' };
     const gameRef = doc(db, 'gameState', 'current');
     const now = Date.now();
 
@@ -42,11 +44,16 @@ export function useGameEngine() {
         if (active && existing.sessionId !== sessionId) {
           return { ok: false, error: 'This team is already connected on another device or tab.' };
         }
+        if (existing?.uid && existing.uid !== user.uid) {
+          return { ok: false, error: 'This team belongs to another authenticated account.' };
+        }
 
         transaction.update(gameRef, {
           [`teams.${teamId}`]: {
             joinedAt: existing?.joinedAt || now,
             sessionId,
+            uid: user.uid,
+            email: user.email,
             lastSeenAt: now,
           },
         });
@@ -55,12 +62,13 @@ export function useGameEngine() {
       return result;
     } catch (error) {
       console.error('joinTeam failed:', error);
-      return { ok: false, error: 'Could not join the team right now. Please try again.' };
+      return { ok: false, error: error?.code === 'permission-denied' ? 'Firebase denied this team action. Check the Firestore rules.' : 'Could not join the team right now. Please try again.' };
     }
   }, []);
 
   const touchTeamSession = useCallback(async (teamId, sessionId) => {
-    if (!sessionId || !TEAM_IDS.includes(teamId)) return;
+    const user = auth.currentUser;
+    if (!user || !sessionId || !TEAM_IDS.includes(teamId)) return;
     try {
       const gameRef = doc(db, 'gameState', 'current');
       await runTransaction(db, async (transaction) => {
@@ -68,7 +76,7 @@ export function useGameEngine() {
         if (!snap.exists()) return;
         const data = snap.data();
         const existing = data.teams?.[teamId];
-        if (existing?.sessionId === sessionId) {
+        if (existing?.sessionId === sessionId && existing?.uid === user.uid) {
           transaction.update(gameRef, { [`teams.${teamId}.lastSeenAt`]: Date.now() });
         }
       });
@@ -78,6 +86,7 @@ export function useGameEngine() {
   }, []);
 
   const startGame = useCallback(async () => {
+    if (!auth.currentUser) throw new Error('You must be signed in as the host.');
     const joined = TEAM_IDS.filter((teamId) => game.teams?.[teamId]);
     if (!joined.length) return;
     const shuffled = [...joined].sort(() => Math.random() - 0.5);
@@ -90,6 +99,7 @@ export function useGameEngine() {
   }, [game.teams]);
 
   const startRapidShooting = useCallback(async () => {
+    if (!auth.currentUser) throw new Error('You must be signed in as the host.');
     const joined = TEAM_IDS.filter((teamId) => game.teams?.[teamId]);
     if (!joined.length) return;
     const positions = Object.fromEntries(joined.map((teamId) => [teamId, 0]));
@@ -105,7 +115,8 @@ export function useGameEngine() {
   }, [game.teams]);
 
   const submitRapidAnswer = useCallback(async (teamId, optionIndex) => {
-    if (game.phase !== 'minigame' || game.minigame?.type !== 'rapid-shooting' || game.minigame?.status !== 'playing') return;
+    const user = auth.currentUser;
+    if (!user || game.phase !== 'minigame' || game.minigame?.type !== 'rapid-shooting' || game.minigame?.status !== 'playing') return;
     const questionIndex = game.minigame.questionIndex ?? 0;
     const question = RAPID_SHOOTING_QUESTIONS[questionIndex];
     if (!question || game.minigame.answers?.[questionIndex]?.[teamId]) return;
@@ -117,7 +128,7 @@ export function useGameEngine() {
     const points = correct && withinTime ? 100 + speedBonus : 0;
     const currentScore = game.minigame.scores?.[teamId] || 0;
     await updateDoc(doc(db, 'gameState', 'current'), {
-      [`minigame.answers.${questionIndex}.${teamId}`]: { optionIndex, correct: correct && withinTime, answeredAt, elapsed: Number(elapsed.toFixed(2)), points },
+      [`minigame.answers.${questionIndex}.${teamId}`]: { uid: user.uid, optionIndex, correct: correct && withinTime, answeredAt, elapsed: Number(elapsed.toFixed(2)), points },
       [`minigame.scores.${teamId}`]: currentScore + points,
     });
   }, [game]);
