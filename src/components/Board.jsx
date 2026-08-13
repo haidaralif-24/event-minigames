@@ -3,7 +3,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import boardTiles from '../data/boardTiles.json';
 
-const TOTAL_TILES = 30;
+const TOTAL_TILES = 68;
 const MAP_WIDTH = 1120;
 const MAP_HEIGHT = 650;
 const MIN_ZOOM = 0.85;
@@ -257,7 +257,7 @@ export default function Board() {
           ))}
 
           <g transform={`translate(${tiles[0].x - 30} ${tiles[0].y - 76})`}><path d="M0 0v45" stroke="#5d3c25" strokeWidth="5" /><path d="M2 0h55l-14 16 14 16H2Z" fill="#45f27b" stroke="#18233f" strokeWidth="3" /><text x="29" y="22" textAnchor="middle" fontSize="11" fontWeight="900" fill="#18233f">START</text></g>
-          <g transform={`translate(${tiles[29].x + 8} ${tiles[29].y - 75})`}><path d="M0 0v45" stroke="#5d3c25" strokeWidth="5" /><path d="M2 0h55l-14 16 14 16H2Z" fill="#ff5555" stroke="#18233f" strokeWidth="3" /><text x="29" y="22" textAnchor="middle" fontSize="11" fontWeight="900" fill="#18233f">FINISH</text></g>
+          <g transform={`translate(${tiles[67].x + 8} ${tiles[67].y - 75})`}><path d="M0 0v45" stroke="#5d3c25" strokeWidth="5" /><path d="M2 0h55l-14 16 14 16H2Z" fill="#ff5555" stroke="#18233f" strokeWidth="3" /><text x="29" y="22" textAnchor="middle" fontSize="11" fontWeight="900" fill="#18233f">FINISH</text></g>
 
           {Object.entries(positions).map(([teamId, tileIndex], idx) => {
             const tile = tiles[tileIndex] || tiles[0];
