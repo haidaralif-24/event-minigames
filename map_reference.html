@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Adventure Island — Improved Map Sketch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --red:#ff4d4d; --blue:#4d79ff; --green:#4dff79; --yellow:#ffea4d;
+    --purple:#a64dff; --orange:#ff8c4d; --pink:#ff4da6;
+    --cream:#fff8e7; --ink:#1a1a2e; --trail:#eaddb8; --grass:#c7e8a4; --water:#a4d8e8;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; width:100%; overflow:hidden; font-family:'Nunito',sans-serif; background:var(--ink); }
+  #stage{ position:relative; height:100vh; width:100vw; overflow:hidden; background:#2c8fae; touch-action:none; cursor:grab; }
+  #stage.dragging{ cursor:grabbing; }
+  #canvas{ position:absolute; left:0; top:0; transform-origin:0 0; will-change:transform; }
+  svg{ display:block; }
+
+  .chip{
+    background:var(--cream); border:3px solid var(--ink); border-radius:16px;
+    box-shadow:0 4px 0 var(--ink);
+  }
+
+  #topbar{
+    position:absolute; top:16px; left:16px; right:16px; z-index:10;
+    display:flex; justify-content:space-between; align-items:flex-start; gap:12px;
+    pointer-events:none;
+  }
+  #title{
+    pointer-events:auto;
+    padding:10px 20px; display:flex; flex-direction:column; gap:2px;
+  }
+  #title h1{
+    margin:0; font-family:'Fredoka One',cursive; font-size:20px; color:var(--ink); letter-spacing:.5px;
+  }
+  #title p{ margin:0; font-size:12px; font-weight:700; color:#5b5470; }
+
+  #legend{
+    pointer-events:auto; padding:12px 16px; display:grid; grid-template-columns:1fr; gap:7px; min-width:190px;
+  }
+  #legend h2{ margin:0 0 2px; font-family:'Fredoka One',cursive; font-size:13px; color:var(--ink); }
+  .legend-row{ display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; color:var(--ink); }
+  .swatch{ width:18px; height:18px; border-radius:6px; border:2.5px solid var(--ink); flex:none; display:flex; align-items:center; justify-content:center; font-size:10px; }
+
+  #controls{
+    position:absolute; bottom:18px; left:18px; z-index:10;
+    display:flex; align-items:center; gap:8px; padding:8px; pointer-events:auto;
+  }
+  #controls button{
+    height:40px; width:40px; border-radius:12px; border:3px solid var(--ink); background:var(--cream);
+    font-family:'Fredoka One',cursive; font-size:18px; color:var(--ink); cursor:pointer; box-shadow:0 3px 0 var(--ink);
+  }
+  #controls button:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--ink); }
+  #controls button.wide{ width:auto; padding:0 14px; font-size:12px; }
+  #zoomLabel{ min-width:46px; text-align:center; font-weight:900; color:var(--ink); font-size:13px; }
+
+  #playbar{
+    position:absolute; bottom:18px; right:18px; z-index:10;
+    display:flex; align-items:center; gap:10px; padding:10px 14px; pointer-events:auto;
+  }
+  #playbar .turn{ font-size:12px; font-weight:900; color:var(--ink); }
+  #rollBtn{
+    font-family:'Fredoka One',cursive; font-size:13px; color:var(--ink); background:var(--yellow);
+    border:3px solid var(--ink); border-radius:12px; padding:8px 16px; cursor:pointer; box-shadow:0 3px 0 var(--ink);
+  }
+  #rollBtn:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--ink); }
+  #diceFace{
+    width:34px; height:34px; border-radius:9px; border:3px solid var(--ink); background:#fff;
+    display:flex; align-items:center; justify-content:center; font-family:'Fredoka One',cursive; font-size:16px; color:var(--ink);
+  }
+
+  #hint{
+    position:absolute; left:50%; bottom:18px; transform:translateX(-50%); z-index:9;
+    padding:7px 14px; font-size:11px; font-weight:800; color:var(--ink); opacity:.85; pointer-events:none;
+    background:rgba(255,248,231,.9); border:2px solid var(--ink); border-radius:12px;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="canvas">
+    <svg id="board" width="2000" height="1150" viewBox="0 0 2000 1150" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="oceanGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#3aa8c9"/><stop offset="1" stop-color="#1f7a9c"/>
+        </linearGradient>
+        <linearGradient id="sandGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#f2dfa0"/><stop offset="1" stop-color="#e0c179"/>
+        </linearGradient>
+        <linearGradient id="grassGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#c7e8a4"/><stop offset="1" stop-color="#8fc85e"/>
+        </linearGradient>
+        <linearGradient id="trailGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#f5e2ac"/><stop offset="1" stop-color="#c99a55"/>
+        </linearGradient>
+        <radialGradient id="peakGrad" cx=".35" cy=".3" r=".8">
+          <stop offset="0" stop-color="#c98a5b"/><stop offset="1" stop-color="#8a5a35"/>
+        </radialGradient>
+        <filter id="softShadow" x="-40%" y="-40%" width="180%" height="200%">
+          <feDropShadow dx="0" dy="6" stdDeviation="4" flood-opacity=".3"/>
+        </filter>
+      </defs>
+
+      <rect width="2000" height="1150" fill="url(#oceanGrad)"/>
+      <g id="waves"></g>
+
+      <path id="islandSand" fill="url(#sandGrad)" stroke="#8a6a3a" stroke-width="6" filter="url(#softShadow)"/>
+      <path id="islandGrass" fill="url(#grassGrad)" stroke="#5f9c3f" stroke-width="5"/>
+
+      <g id="scenery"></g>
+
+      <path id="trailShadow" fill="none" stroke="#8b6b38" stroke-width="30" stroke-linecap="round" opacity=".28"/>
+      <path id="trailBase" fill="none" stroke="url(#trailGrad)" stroke-width="22" stroke-linecap="round"/>
+      <path id="trailDash" fill="none" stroke="#fff6df" stroke-width="5" stroke-linecap="round" stroke-dasharray="1 20" opacity=".85"/>
+
+      <g id="dockBoat"></g>
+      <g id="castle"></g>
+      <g id="tiles"></g>
+      <g id="tokens"></g>
+    </svg>
+  </div>
+</div>
+
+<div id="topbar">
+  <div id="title" class="chip">
+    <h1>Adventure Island</h1>
+    <p>Improved map — spiral route, 67 tiles</p>
+  </div>
+  <div id="legend" class="chip">
+    <h2>Tile key</h2>
+    <div class="legend-row"><span class="swatch" style="background:var(--green)">S</span> Start</div>
+    <div class="legend-row"><span class="swatch" style="background:#fffdf5">·</span> Normal trail</div>
+    <div class="legend-row"><span class="swatch" style="background:var(--yellow)">★</span> Bonus tile</div>
+    <div class="legend-row"><span class="swatch" style="background:var(--blue);color:#fff">?</span> Challenge</div>
+    <div class="legend-row"><span class="swatch" style="background:var(--orange)">!</span> Trap tile</div>
+    <div class="legend-row"><span class="swatch" style="background:var(--purple);color:#fff">⌂</span> Checkpoint</div>
+    <div class="legend-row"><span class="swatch" style="background:var(--red)">F</span> Finish</div>
+  </div>
+</div>
+
+<div id="controls" class="chip">
+  <button id="zoomOut" aria-label="Zoom out">−</button>
+  <div id="zoomLabel">100%</div>
+  <button id="zoomIn" aria-label="Zoom in">+</button>
+  <button id="resetView" class="wide">Reset</button>
+</div>
+
+<div id="playbar" class="chip">
+  <span class="turn">Preview:</span>
+  <div id="diceFace">1</div>
+  <button id="rollBtn">Roll &amp; move</button>
+</div>
+
+<div id="hint">Drag to explore · Scroll to zoom · Roll the dice to preview a token walking the route</div>
+
+<script>
+(function(){
+  var CX=1000, CY=575, MAXR=520, MINR=100, N=67, REV=2.2;
+  var ASPECT=1.55;
+  var startAngle = 0.35;
+  var angleStep = (REV*2*Math.PI)/(N-1);
+
+  function tilePoint(i){
+    var t = i/(N-1);
+    var radius = MINR + (MAXR-MINR)*Math.pow(1-t, 0.82);
+    var angle = startAngle + i*angleStep;
+    return { x: CX + radius*Math.cos(angle)*ASPECT, y: CY + radius*Math.sin(angle) };
+  }
+
+  var tiles = [];
+  for(var i=0;i<N;i++){
+    var type='normal';
+    if(i===0) type='start';
+    else if(i===N-1) type='finish';
+    else if(i===30 || i===55) type='checkpoint';
+    else if(i%11===0) type='penalty';
+    else if(i%7===0) type='bonus';
+    else if(i%5===0) type='challenge';
+    var p = tilePoint(i);
+    tiles.push({index:i, type:type, x:p.x, y:p.y});
+  }
+
+  function catmullRom(points){
+    var d='';
+    for(var i=0;i<points.length-1;i++){
+      var p0 = points[i===0?0:i-1];
+      var p1 = points[i];
+      var p2 = points[i+1];
+      var p3 = points[i+2<points.length?i+2:i+1];
+      var c1x = p1.x + (p2.x-p0.x)/6, c1y = p1.y + (p2.y-p0.y)/6;
+      var c2x = p2.x - (p3.x-p1.x)/6, c2y = p2.y - (p3.y-p1.y)/6;
+      if(i===0) d += 'M '+p1.x+' '+p1.y+' ';
+      d += 'C '+c1x+' '+c1y+', '+c2x+' '+c2y+', '+p2.x+' '+p2.y+' ';
+    }
+    return d;
+  }
+
+  function smoothBlob(points){
+    var first=points[0], last=points[points.length-1];
+    var d='M '+((first.x+last.x)/2)+' '+((first.y+last.y)/2)+' ';
+    for(var i=0;i<points.length;i++){
+      var curr=points[i], next=points[(i+1)%points.length];
+      var mx=(curr.x+next.x)/2, my=(curr.y+next.y)/2;
+      d += 'Q '+curr.x+' '+curr.y+', '+mx+' '+my+' ';
+    }
+    return d+'Z';
+  }
+
+  function blobPoints(cx,cy,r0,n,phase){
+    var pts=[];
+    for(var i=0;i<n;i++){
+      var a=(i/n)*Math.PI*2;
+      var jitter = 1 + 0.10*Math.sin(a*3+phase) + 0.05*Math.sin(a*5+phase*1.7);
+      var r=r0*jitter;
+      pts.push({x:cx+r*Math.cos(a)*ASPECT, y:cy+r*Math.sin(a)});
+    }
+    return pts;
+  }
+
+  var svgns='http://www.w3.org/2000/svg';
+  function el(tag, attrs){
+    var e=document.createElementNS(svgns, tag);
+    for(var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  document.getElementById('islandSand').setAttribute('d', smoothBlob(blobPoints(CX,CY,600,26,0.4)));
+  document.getElementById('islandGrass').setAttribute('d', smoothBlob(blobPoints(CX,CY,530,26,1.1)));
+
+  var trailD = catmullRom(tiles.map(function(t){return {x:t.x,y:t.y};}));
+  document.getElementById('trailShadow').setAttribute('d', trailD);
+  document.getElementById('trailBase').setAttribute('d', trailD);
+  document.getElementById('trailDash').setAttribute('d', trailD);
+
+  var waves = document.getElementById('waves');
+  for(var r=660; r<1300; r+=70){
+    var pts = blobPoints(CX,CY,r,40,r*0.02);
+    var path = el('path',{d:smoothBlob(pts).replace('Z',''), fill:'none', stroke:'#ffffff', 'stroke-width':2, opacity:0.12});
+    waves.appendChild(path);
+  }
+
+  function Tree(x,y,scale){
+    var g=el('g',{transform:'translate('+x+' '+y+') scale('+scale+')'});
+    g.innerHTML = '<ellipse cx="0" cy="26" rx="15" ry="6" fill="#1a1a2e" opacity=".18"/>'+
+      '<path d="M-4 24h8l-1-30h-6z" fill="#8a5a32" stroke="#1a1a2e" stroke-width="2"/>'+
+      '<circle cx="0" cy="-14" r="20" fill="#3f9142" stroke="#1a1a2e" stroke-width="3"/>'+
+      '<circle cx="-10" cy="-24" r="13" fill="#4bab4c" stroke="#1a1a2e" stroke-width="3"/>'+
+      '<circle cx="11" cy="-22" r="14" fill="#4bab4c" stroke="#1a1a2e" stroke-width="3"/>';
+    return g;
+  }
+  function Palm(x,y,scale){
+    var g=el('g',{transform:'translate('+x+' '+y+') scale('+scale+')'});
+    g.innerHTML = '<ellipse cx="0" cy="4" rx="16" ry="5" fill="#1a1a2e" opacity=".18"/>'+
+      '<path d="M0 0C-4 -22 2 -40 -6 -58" fill="none" stroke="#8a5a32" stroke-width="7" stroke-linecap="round"/>'+
+      '<g transform="translate(-6 -58)">'+
+      '<path d="M0 0C-22 -6 -34 -18 -38 -30C-24 -22 -10 -14 0 0Z" fill="#4bab4c" stroke="#1a1a2e" stroke-width="2.5"/>'+
+      '<path d="M0 0C20 -8 30 -20 32 -34C20 -24 8 -14 0 0Z" fill="#3f9142" stroke="#1a1a2e" stroke-width="2.5"/>'+
+      '<path d="M0 0C-14 -20 -12 -34 0 -46C10 -34 12 -20 0 0Z" fill="#4bab4c" stroke="#1a1a2e" stroke-width="2.5"/>'+
+      '<circle cx="3" cy="4" r="4" fill="#8a5a32" stroke="#1a1a2e" stroke-width="1.5"/>'+
+      '</g>';
+    return g;
+  }
+  function Rock(x,y,scale){
+    var g=el('g',{transform:'translate('+x+' '+y+') scale('+scale+')'});
+    g.innerHTML='<ellipse cx="0" cy="9" rx="17" ry="5" fill="#1a1a2e" opacity=".16"/>'+
+      '<path d="M-14 7L-10-7 0-13 13-6 10 7Z" fill="#9aa79b" stroke="#1a1a2e" stroke-width="2.5"/>';
+    return g;
+  }
+  function Flower(x,y,color){
+    var g=el('g',{transform:'translate('+x+' '+y+')'});
+    g.innerHTML='<circle cx="0" cy="0" r="3.6" fill="'+color+'" stroke="#1a1a2e" stroke-width="1.5"/>';
+    return g;
+  }
+  function Hut(x,y,scale){
+    var g=el('g',{transform:'translate('+x+' '+y+') scale('+scale+')'});
+    g.innerHTML='<ellipse cx="0" cy="18" rx="24" ry="6" fill="#1a1a2e" opacity=".18"/>'+
+      '<rect x="-14" y="-2" width="28" height="20" fill="#e0c179" stroke="#1a1a2e" stroke-width="2.5"/>'+
+      '<path d="M-18-2L0-22 18-2Z" fill="#c9673d" stroke="#1a1a2e" stroke-width="2.5"/>';
+    return g;
+  }
+
+  var scenery = document.getElementById('scenery');
+  var props = [
+    [Palm, 279,255,1.6], [Palm, 1708,275,1.7], [Palm, 225,855,1.6], [Palm, 1748,835,1.5],
+    [Palm, 1000,145,1.4], [Palm, 1000,1015,1.5], [Tree, 559,185,1.5], [Tree, 1428,205,1.4],
+    [Tree, 439,955,1.4], [Tree, 1575,935,1.6], [Rock, 760,225,1.5], [Rock, 1281,935,1.4],
+    [Rock, 332,555,1.3], [Rock, 1668,555,1.4], [Palm, 679,1035,1.5], [Palm, 1321,95,1.5]
+  ];
+  props.forEach(function(p){ scenery.appendChild(p[0](p[1],p[2],p[3])); });
+  var flowerSpots = [[626,315,'#ffea4d'],[1240,295,'#ff4da6'],[492,715,'#ffea4d'],[1481,715,'#ff4da6'],[866,955,'#a64dff'],[1134,175,'#4d79ff']];
+  flowerSpots.forEach(function(f){ scenery.appendChild(Flower(f[0],f[1],f[2])); });
+
+  tiles.filter(function(t){return t.type==='checkpoint';}).forEach(function(ct){
+    scenery.appendChild(Hut(ct.x, ct.y-46, 1.3));
+  });
+
+  var startTile = tiles[0], finishTile = tiles[N-1];
+  var dock = document.getElementById('dockBoat');
+  dock.innerHTML = '<g transform="translate('+(startTile.x+70)+' '+(startTile.y+30)+')">'+
+    '<rect x="-10" y="-70" width="16" height="110" fill="#8a5a32" stroke="#1a1a2e" stroke-width="3"/>'+
+    '<path d="M-40 30C-10 50 30 50 55 25C45 45 5 65 -40 30Z" fill="#c9673d" stroke="#1a1a2e" stroke-width="3"/>'+
+    '<path d="M-2 -66L52 -20L-2 -8Z" fill="#fff8e7" stroke="#1a1a2e" stroke-width="3"/></g>';
+
+  var castle = document.getElementById('castle');
+  castle.innerHTML = '<g transform="translate('+CX+' '+CY+')">'+
+    '<circle cx="0" cy="0" r="92" fill="url(#peakGrad)" stroke="#5a3a20" stroke-width="6"/>'+
+    '<rect x="-28" y="-64" width="56" height="60" fill="#e7ddc8" stroke="#1a1a2e" stroke-width="4"/>'+
+    '<path d="M-34-64L0-98L34-64Z" fill="#c9673d" stroke="#1a1a2e" stroke-width="4"/>'+
+    '<rect x="-8" y="-30" width="16" height="26" fill="#5a3a20" stroke="#1a1a2e" stroke-width="2.5"/>'+
+    '<path d="M0 -98v-22" stroke="#1a1a2e" stroke-width="3"/>'+
+    '<path d="M0 -120h26l-13 13z" fill="var(--red)" stroke="#1a1a2e" stroke-width="2.5"/></g>';
+
+  var TYPE_STYLE = {
+    start:{fill:'var(--green)', icon:'S'},
+    finish:{fill:'var(--red)', icon:'F'},
+    normal:{fill:'#fffdf5', icon:''},
+    bonus:{fill:'var(--yellow)', icon:'★'},
+    challenge:{fill:'var(--blue)', icon:'?', light:true},
+    penalty:{fill:'var(--orange)', icon:'!'},
+    checkpoint:{fill:'var(--purple)', icon:'⌂', light:true}
+  };
+
+  var tilesG = document.getElementById('tiles');
+  tiles.forEach(function(tile){
+    var s = TYPE_STYLE[tile.type];
+    var size = (tile.type==='start'||tile.type==='finish')?42:34;
+    var g = el('g',{transform:'translate('+tile.x+' '+tile.y+')', filter:'url(#softShadow)'});
+    var rect = el('rect',{x:-size/2,y:-size/2,width:size,height:size,rx:10,fill:s.fill,stroke:'#1a1a2e','stroke-width':3.5});
+    g.appendChild(rect);
+    if(s.icon){
+      var icon = el('text',{x:0,y:5,'text-anchor':'middle','font-size':16,'font-weight':900,fill:s.light?'#fff':'#1a1a2e','font-family':'Fredoka One, sans-serif'});
+      icon.textContent = s.icon;
+      g.appendChild(icon);
+    } else {
+      var num = el('text',{x:0,y:4,'text-anchor':'middle','font-size':11,'font-weight':900,fill:'#1a1a2e','font-family':'Nunito, sans-serif'});
+      num.textContent = tile.index+1;
+      g.appendChild(num);
+    }
+    tilesG.appendChild(g);
+  });
+
+  function Stickman(color){
+    var g = el('g',{});
+    g.innerHTML = '<ellipse cx="0" cy="24" rx="13" ry="4" fill="#1a1a2e" opacity=".22"/>'+
+      '<path d="M0 2v14M-8 8h16M0 16l-8 9M0 16l8 9" stroke="#1a1a2e" stroke-width="4.5" stroke-linecap="round"/>'+
+      '<circle cx="0" cy="-8" r="10" fill="'+color+'" stroke="#1a1a2e" stroke-width="3.5"/>'+
+      '<circle cx="-3.4" cy="-9" r="1.6" fill="#1a1a2e"/><circle cx="3.4" cy="-9" r="1.6" fill="#1a1a2e"/>'+
+      '<path d="M-3 -4.5C-1 -3 1 -3 3 -4.5" fill="none" stroke="#1a1a2e" stroke-width="1.6" stroke-linecap="round"/>';
+    return g;
+  }
+
+  var tokensG = document.getElementById('tokens');
+  var teams = [
+    {id:'A', color:'#ff4d4d', pos:0},
+    {id:'B', color:'#4d79ff', pos:5},
+    {id:'C', color:'#ffea4d', pos:14},
+    {id:'D', color:'#a64dff', pos:23}
+  ];
+  var tokenEls = {};
+  teams.forEach(function(team, idx){
+    var p = tilePoint(team.pos);
+    var offset = (idx%2===0)? -16 : 16;
+    var g = el('g',{transform:'translate('+(p.x+offset)+' '+(p.y-30)+')'});
+    g.appendChild(Stickman(team.color));
+    tokensG.appendChild(g);
+    tokenEls[team.id] = g;
+    team.el = g;
+  });
+
+  var activeTeam = teams[0];
+  var animating = false;
+  function moveTokenTo(team, steps, cb){
+    if(animating) return;
+    animating = true;
+    var startPos = team.pos;
+    var target = Math.min(startPos+steps, N-1);
+    var stepIndex = startPos;
+    function nextStep(){
+      if(stepIndex>=target){ animating=false; if(cb) cb(); return; }
+      stepIndex++;
+      var p = tilePoint(stepIndex);
+      var hopPeak = {x:p.x, y:p.y-18};
+      var frames = [ {x:p.x,y:p.y-6}, hopPeak, {x:p.x,y:p.y} ];
+      var f=0;
+      function frame(){
+        if(f>=frames.length){ setTimeout(nextStep, 40); return; }
+        var pt=frames[f];
+        team.el.setAttribute('transform','translate('+pt.x+' '+(pt.y-30)+')');
+        f++;
+        requestAnimationFrame(function(){ setTimeout(frame, 60); });
+      }
+      frame();
+    }
+    nextStep();
+    team.pos = target;
+  }
+
+  document.getElementById('rollBtn').addEventListener('click', function(){
+    if(animating) return;
+    var roll = 1+Math.floor(Math.random()*6);
+    document.getElementById('diceFace').textContent = roll;
+    moveTokenTo(activeTeam, roll);
+  });
+
+  var stage = document.getElementById('stage');
+  var canvas = document.getElementById('canvas');
+  var zoom = 1, fitScale = 1, pan = {x:0,y:0};
+  var MINZ=0.6, MAXZ=2.6;
+
+  function applyTransform(){
+    canvas.style.transform = 'translate('+pan.x+'px,'+pan.y+'px) scale('+(fitScale*zoom)+')';
+    document.getElementById('zoomLabel').textContent = Math.round(zoom*100)+'%';
+  }
+  function clampPan(){
+    var w=2000*fitScale*zoom, h=1150*fitScale*zoom;
+    var vw=stage.clientWidth, vh=stage.clientHeight;
+    pan.x = w<=vw ? (vw-w)/2 : Math.min(0, Math.max(vw-w, pan.x));
+    pan.y = h<=vh ? (vh-h)/2 : Math.min(0, Math.max(vh-h, pan.y));
+  }
+  function fitToScreen(){
+    fitScale = Math.min(stage.clientWidth/2000, stage.clientHeight/1150) * 0.98;
+    clampPan(); applyTransform();
+  }
+  window.addEventListener('resize', fitToScreen);
+  fitToScreen();
+  pan = {x:(stage.clientWidth-2000*fitScale)/2, y:(stage.clientHeight-1150*fitScale)/2};
+  applyTransform();
+
+  function zoomAt(nextZoom, clientX, clientY){
+    var rect = stage.getBoundingClientRect();
+    var cx = clientX-rect.left, cy = clientY-rect.top;
+    var oldScale = fitScale*zoom;
+    zoom = Math.min(MAXZ, Math.max(MINZ, nextZoom));
+    var newScale = fitScale*zoom;
+    var mapX = (cx-pan.x)/oldScale, mapY=(cy-pan.y)/oldScale;
+    pan = {x: cx-mapX*newScale, y: cy-mapY*newScale};
+    clampPan(); applyTransform();
+  }
+
+  stage.addEventListener('wheel', function(e){
+    e.preventDefault();
+    zoomAt(zoom*Math.exp(-e.deltaY*0.0015), e.clientX, e.clientY);
+  }, {passive:false});
+
+  var dragging=false, dragStart=null;
+  stage.addEventListener('pointerdown', function(e){
+    dragging=true; stage.classList.add('dragging');
+    dragStart = {x:e.clientX, y:e.clientY, pan:{x:pan.x,y:pan.y}};
+    stage.setPointerCapture(e.pointerId);
+  });
+  stage.addEventListener('pointermove', function(e){
+    if(!dragging) return;
+    pan = {x:dragStart.pan.x+(e.clientX-dragStart.x), y:dragStart.pan.y+(e.clientY-dragStart.y)};
+    clampPan(); applyTransform();
+  });
+  ['pointerup','pointercancel'].forEach(function(ev){
+    stage.addEventListener(ev, function(){ dragging=false; stage.classList.remove('dragging'); });
+  });
+
+  document.getElementById('zoomIn').addEventListener('click', function(){
+    var r = stage.getBoundingClientRect();
+    zoomAt(zoom*1.25, r.left+r.width/2, r.top+r.height/2);
+  });
+  document.getElementById('zoomOut').addEventListener('click', function(){
+    var r = stage.getBoundingClientRect();
+    zoomAt(zoom/1.25, r.left+r.width/2, r.top+r.height/2);
+  });
+  document.getElementById('resetView').addEventListener('click', function(){
+    zoom=1; fitToScreen();
+    pan = {x:(stage.clientWidth-2000*fitScale)/2, y:(stage.clientHeight-1150*fitScale)/2};
+    applyTransform();
+  });
+})();
+</script>
+</body>
+</html>

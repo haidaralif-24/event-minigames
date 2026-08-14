@@ -2,12 +2,16 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import boardTiles from '../data/boardTiles.json';
+import { TEAM_COLORS } from '../data/constants';
 
 const TOTAL_TILES = 68;
 const MAP_WIDTH = 2240;
 const MAP_HEIGHT = 1300;
 const MIN_ZOOM = 0.85;
 const MAX_ZOOM = 3.2;
+
+const OUTLINE = '#1a1a2e';
+const ASPECT = 1.6;
 
 const PATH_POINTS = [
   { x: 180, y: 1000 }, { x: 250, y: 840 }, { x: 210, y: 660 },
@@ -20,6 +24,16 @@ const PATH_POINTS = [
   { x: 1880, y: 700 }, { x: 1950, y: 850 }, { x: 2060, y: 1000 },
   { x: 2160, y: 1130 },
 ];
+
+const TYPE_STYLE = {
+  start: { fill: '#45f27b', icon: 'S' },
+  finish: { fill: '#ff5555', icon: 'F' },
+  normal: { fill: '#fffdf5', icon: null },
+  bonus: { fill: '#ffea4d', icon: '★' },
+  challenge: { fill: '#4d79ff', icon: '?', light: true },
+  penalty: { fill: '#ff8c4d', icon: '!' },
+  checkpoint: { fill: '#a64dff', icon: '⌂', light: true },
+};
 
 function buildPath(points) {
   const segments = [];
@@ -52,38 +66,148 @@ function buildTilePositions(total) {
   );
 }
 
+function catmullRom(pts) {
+  let d = '';
+  for (let i = 0; i < pts.length - 1; i += 1) {
+    const p0 = pts[i === 0 ? 0 : i - 1];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2 < pts.length ? i + 2 : i + 1];
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    if (i === 0) d += `M ${p1.x} ${p1.y} `;
+    d += `C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.x} ${p2.y} `;
+  }
+  return d;
+}
+
+function blobPoints(cx, cy, r0, n, phase, aspect = ASPECT) {
+  const pts = [];
+  for (let i = 0; i < n; i += 1) {
+    const a = (i / n) * Math.PI * 2;
+    const jitter = 1 + 0.1 * Math.sin(a * 3 + phase) + 0.05 * Math.sin(a * 5 + phase * 1.7);
+    const r = r0 * jitter;
+    pts.push({ x: cx + r * Math.cos(a) * aspect, y: cy + r * Math.sin(a) });
+  }
+  return pts;
+}
+
+function smoothBlob(points) {
+  const first = points[0];
+  const last = points[points.length - 1];
+  let d = `M ${(first.x + last.x) / 2} ${(first.y + last.y) / 2} `;
+  for (let i = 0; i < points.length; i += 1) {
+    const curr = points[i];
+    const next = points[(i + 1) % points.length];
+    const mx = (curr.x + next.x) / 2;
+    const my = (curr.y + next.y) / 2;
+    d += `Q ${curr.x} ${curr.y}, ${mx} ${my} `;
+  }
+  return `${d}Z`;
+}
+
+function Palm({ x, y, scale = 1 }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${scale})`}>
+      <ellipse cx="0" cy="4" rx="16" ry="5" fill={OUTLINE} opacity=".18" />
+      <path d="M0 0C-4 -22 2 -40 -6 -58" fill="none" stroke="#8a5a32" strokeWidth="7" strokeLinecap="round" />
+      <g transform="translate(-6 -58)">
+        <path d="M0 0C-22 -6 -34 -18 -38 -30C-24 -22 -10 -14 0 0Z" fill="#4bab4c" stroke={OUTLINE} strokeWidth="2.5" />
+        <path d="M0 0C20 -8 30 -20 32 -34C20 -24 8 -14 0 0Z" fill="#3f9142" stroke={OUTLINE} strokeWidth="2.5" />
+        <path d="M0 0C-14 -20 -12 -34 0 -46C10 -34 12 -20 0 0Z" fill="#4bab4c" stroke={OUTLINE} strokeWidth="2.5" />
+        <circle cx="3" cy="4" r="4" fill="#8a5a32" stroke={OUTLINE} strokeWidth="1.5" />
+      </g>
+    </g>
+  );
+}
+
 function Tree({ x, y, scale = 1 }) {
-  return <g transform={`translate(${x} ${y}) scale(${scale})`}>
-    <ellipse cx="0" cy="26" rx="25" ry="8" fill="#315d2d" opacity=".25" />
-    <path d="M-6 25h12l-2-27h-8z" fill="#75502e" />
-    <path d="M0-62C-28-38-28-10-12 2H12C28-10 28-38 0-62Z" fill="#2f6d3b" stroke="#23572f" strokeWidth="2" />
-    <path d="M0-42C-20-23-20-3-9 9H9C20-3 20-23 0-42Z" fill="#4e8c42" />
-    <path d="M0-25C-12-11-12 3-5 11H5C12 3 12-11 0-25Z" fill="#6da34d" />
-  </g>;
+  return (
+    <g transform={`translate(${x} ${y}) scale(${scale})`}>
+      <ellipse cx="0" cy="26" rx="15" ry="6" fill={OUTLINE} opacity=".18" />
+      <path d="M-4 24h8l-1-30h-6z" fill="#8a5a32" stroke={OUTLINE} strokeWidth="2" />
+      <circle cx="0" cy="-14" r="20" fill="#3f9142" stroke={OUTLINE} strokeWidth="3" />
+      <circle cx="-10" cy="-24" r="13" fill="#4bab4c" stroke={OUTLINE} strokeWidth="3" />
+      <circle cx="11" cy="-22" r="14" fill="#4bab4c" stroke={OUTLINE} strokeWidth="3" />
+    </g>
+  );
 }
 
 function Bush({ x, y, scale = 1 }) {
-  return <g transform={`translate(${x} ${y}) scale(${scale})`}>
-    <ellipse cx="0" cy="9" rx="31" ry="8" fill="#315d2d" opacity=".22" />
-    <circle cx="-18" cy="0" r="15" fill="#4b873d" /><circle cx="0" cy="-8" r="19" fill="#629b47" />
-    <circle cx="18" cy="1" r="15" fill="#3f7b38" /><circle cx="-5" cy="-11" r="5" fill="#86b95d" />
-  </g>;
+  return (
+    <g transform={`translate(${x} ${y}) scale(${scale})`}>
+      <ellipse cx="0" cy="9" rx="31" ry="8" fill={OUTLINE} opacity=".22" />
+      <circle cx="-18" cy="0" r="15" fill="#4b873d" />
+      <circle cx="0" cy="-8" r="19" fill="#629b47" />
+      <circle cx="18" cy="1" r="15" fill="#3f7b38" />
+      <circle cx="-5" cy="-11" r="5" fill="#86b95d" />
+    </g>
+  );
 }
 
 function Rock({ x, y, scale = 1 }) {
-  return <g transform={`translate(${x} ${y}) scale(${scale})`}>
-    <ellipse cx="0" cy="9" rx="25" ry="7" fill="#315d2d" opacity=".2" />
-    <path d="M-20 8L-15-9 0-18 19-8 15 8Z" fill="#879688" stroke="#647264" strokeWidth="2" />
-    <path d="M-9-7L1-13 9-7" fill="none" stroke="#c0c9bd" strokeWidth="3" opacity=".8" />
-  </g>;
+  return (
+    <g transform={`translate(${x} ${y}) scale(${scale})`}>
+      <ellipse cx="0" cy="9" rx="17" ry="5" fill={OUTLINE} opacity=".16" />
+      <path d="M-14 7L-10-7 0-13 13-6 10 7Z" fill="#9aa79b" stroke={OUTLINE} strokeWidth="2.5" />
+    </g>
+  );
 }
 
-function Flower({ x, y }) {
-  return <g transform={`translate(${x} ${y})`}>
-    <path d="M0 0v13" stroke="#4d873e" strokeWidth="2" />
-    <circle cx="0" cy="-2" r="4" fill="#ffd84d" /><circle cx="-5" cy="-3" r="4" fill="#fff5df" />
-    <circle cx="5" cy="-3" r="4" fill="#fff5df" /><circle cx="0" cy="-8" r="4" fill="#fff5df" />
-  </g>;
+function Flower({ x, y, color }) {
+  return (
+    <g transform={`translate(${x} ${y})`}>
+      <circle cx="0" cy="0" r="4" fill={color} stroke={OUTLINE} strokeWidth="1.5" />
+    </g>
+  );
+}
+
+function Hut({ x, y, scale = 1 }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${scale})`}>
+      <ellipse cx="0" cy="18" rx="24" ry="6" fill={OUTLINE} opacity=".18" />
+      <rect x="-14" y="-2" width="28" height="20" fill="#e0c179" stroke={OUTLINE} strokeWidth="2.5" />
+      <path d="M-18-2L0-22 18-2Z" fill="#c9673d" stroke={OUTLINE} strokeWidth="2.5" />
+    </g>
+  );
+}
+
+function Dock({ x, y }) {
+  return (
+    <g transform={`translate(${x} ${y})`}>
+      <rect x="-10" y="-70" width="16" height="110" fill="#8a5a32" stroke={OUTLINE} strokeWidth="3" />
+      <path d="M-40 30C-10 50 30 50 55 25C45 45 5 65 -40 30Z" fill="#c9673d" stroke={OUTLINE} strokeWidth="3" />
+      <path d="M-2 -66L52 -20L-2 -8Z" fill="#fff8e7" stroke={OUTLINE} strokeWidth="3" />
+    </g>
+  );
+}
+
+function Castle({ x, y }) {
+  return (
+    <g transform={`translate(${x} ${y})`}>
+      <circle cx="0" cy="0" r="92" fill="url(#peakGrad)" stroke="#5a3a20" strokeWidth="6" />
+      <rect x="-28" y="-64" width="56" height="60" fill="#e7ddc8" stroke={OUTLINE} strokeWidth="4" />
+      <path d="M-34-64L0-98L34-64Z" fill="#c9673d" stroke={OUTLINE} strokeWidth="4" />
+      <rect x="-8" y="-30" width="16" height="26" fill="#5a3a20" stroke={OUTLINE} strokeWidth="2.5" />
+      <path d="M0 -98v-22" stroke={OUTLINE} strokeWidth="3" />
+      <path d="M0 -120h26l-13 13z" fill="#ff5555" stroke={OUTLINE} strokeWidth="2.5" />
+    </g>
+  );
+}
+
+function Stickman({ color, x, y }) {
+  return (
+    <g transform={`translate(${x} ${y})`} filter="url(#softShadow)">
+      <ellipse cx="0" cy="24" rx="13" ry="4" fill={OUTLINE} opacity=".22" />
+      <path d="M0 2v14M-8 8h16M0 16l-8 9M0 16l8 9" stroke={OUTLINE} strokeWidth="4.5" strokeLinecap="round" />
+      <circle cx="0" cy="-8" r="10" fill={color} stroke={OUTLINE} strokeWidth="3.5" />
+      <circle cx="-3.4" cy="-9" r="1.6" fill={OUTLINE} />
+      <circle cx="3.4" cy="-9" r="1.6" fill={OUTLINE} />
+      <path d="M-3 -4.5C-1 -3 1 -3 3 -4.5" fill="none" stroke={OUTLINE} strokeWidth="1.6" strokeLinecap="round" />
+    </g>
+  );
 }
 
 export default function Board() {
@@ -183,11 +307,22 @@ export default function Board() {
     return source.map((tile, index) => ({ ...tile, index, ...tilePositions[index] }));
   }, []);
 
-  const trailPath = PATH_POINTS.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
-  const colors = ['#ff4d4d', '#4d79ff', '#4dff79', '#ffea4d', '#a64dff', '#ff8c4d'];
+  const trailPath = useMemo(() => catmullRom(PATH_POINTS), []);
+  const sandPath = useMemo(() => smoothBlob(blobPoints(1120, 650, 720, 26, 0.4)), []);
+  const grassPath = useMemo(() => smoothBlob(blobPoints(1120, 650, 680, 26, 1.1)), []);
+  const wavePaths = useMemo(
+    () => Array.from({ length: Math.ceil((1280 - 760) / 70) + 1 }, (_, i) => {
+      const r = 760 + i * 70;
+      return smoothBlob(blobPoints(1120, 650, r, 40, r * 0.02)).replace('Z', '');
+    }),
+    [],
+  );
+
+  const startTile = tiles[0];
+  const finishTile = tiles[TOTAL_TILES - 1];
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#6fa53e] select-none">
+    <div className="relative h-full w-full overflow-hidden bg-[#2c8fae] select-none">
       <div
         ref={viewportRef}
         className="absolute inset-0 overflow-hidden"
@@ -203,7 +338,7 @@ export default function Board() {
           viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
           width={MAP_WIDTH}
           height={MAP_HEIGHT}
-          aria-label="Illustrated adventure board"
+          aria-label="Illustrated adventure island board"
           style={{
             position: 'absolute', left: 0, top: 0,
             transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${effectiveScale})`,
@@ -212,74 +347,126 @@ export default function Board() {
           }}
         >
           <defs>
-            <linearGradient id="meadow" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#b8d96b" /><stop offset="1" stopColor="#79ad43" /></linearGradient>
-            <linearGradient id="water" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#63d1df" /><stop offset="1" stopColor="#258ea8" /></linearGradient>
-            <linearGradient id="trail" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#efd494" /><stop offset="1" stopColor="#bf8d48" /></linearGradient>
-            <pattern id="grassTexture" width="44" height="44" patternUnits="userSpaceOnUse">
-              <circle cx="7" cy="9" r="2" fill="#4c873b" opacity=".22" /><circle cx="30" cy="31" r="2" fill="#e6eeaa" opacity=".25" />
-              <path d="M17 22l3-6m0 6l-3-3M35 12l3-6m0 6l-3-3" stroke="#4c873b" strokeWidth="2" opacity=".25" />
-            </pattern>
-            <filter id="tileShadow" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="5" stdDeviation="3" floodOpacity=".28" /></filter>
+            <linearGradient id="oceanGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#3aa8c9" /><stop offset="1" stopColor="#1f7a9c" />
+            </linearGradient>
+            <linearGradient id="sandGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#f2dfa0" /><stop offset="1" stopColor="#e0c179" />
+            </linearGradient>
+            <linearGradient id="grassGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#c7e8a4" /><stop offset="1" stopColor="#8fc85e" />
+            </linearGradient>
+            <linearGradient id="trailGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#f5e2ac" /><stop offset="1" stopColor="#c99a55" />
+            </linearGradient>
+            <radialGradient id="peakGrad" cx=".35" cy=".3" r=".8">
+              <stop offset="0" stopColor="#c98a5b" /><stop offset="1" stopColor="#8a5a35" />
+            </radialGradient>
+            <filter id="softShadow" x="-40%" y="-40%" width="180%" height="200%">
+              <feDropShadow dx="0" dy="6" stdDeviation="4" floodOpacity=".3" />
+            </filter>
+            <filter id="tileShadow" x="-30%" y="-30%" width="160%" height="170%">
+              <feDropShadow dx="0" dy="5" stdDeviation="3" floodOpacity=".28" />
+            </filter>
           </defs>
 
-          <rect width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#meadow)" />
-          <rect width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#grassTexture)" />
-
-          <g transform="scale(2)">
-            <path d="M185 220C235 170 350 180 390 245C420 295 390 360 330 385C255 415 170 370 165 305C160 270 170 240 185 220Z" fill="#236f82" opacity=".3" />
-            <path d="M195 215C245 180 340 190 375 245C400 285 375 345 325 370C265 395 185 355 180 300C177 265 182 235 195 215Z" fill="url(#water)" stroke="#397987" strokeWidth="7" />
-            <path d="M395 155C430 205 425 250 410 300C395 350 420 395 470 430C515 462 550 470 605 480" fill="none" stroke="#216f83" strokeWidth="36" opacity=".35" />
-            <path d="M395 155C430 205 425 250 410 300C395 350 420 395 470 430C515 462 550 470 605 480" fill="none" stroke="url(#water)" strokeWidth="25" strokeLinecap="round" />
-            <path d="M230 255c28-13 55-14 82-3M250 325c25-10 48-10 69-2M415 210c10 17 12 34 6 51M440 375c16 17 28 26 45 34" fill="none" stroke="#c1f3f0" strokeWidth="4" strokeLinecap="round" opacity=".7" />
-            <ellipse cx="255" cy="250" rx="16" ry="8" fill="#78b85a" transform="rotate(-15 255 250)" />
-            <ellipse cx="335" cy="320" rx="13" ry="7" fill="#78b85a" transform="rotate(20 335 320)" />
-
-            <g transform="translate(415 300)"><rect x="-28" y="-17" width="56" height="34" rx="6" fill="#8a5a32" stroke="#5e3d25" strokeWidth="3" /><path d="M-21-10h42M-21 0h42M-21 10h42" stroke="#c38a4c" strokeWidth="5" /><path d="M-29-20h58M-29 20h58" stroke="#654127" strokeWidth="5" /></g>
-          </g>
-
-          <Tree x={130} y={200} scale={2.2} /><Tree x={290} y={170} scale={1.6} /><Tree x={730} y={180} scale={1.8} />
-          <Tree x={1020} y={150} scale={2.2} /><Tree x={1250} y={190} scale={1.8} /><Tree x={1350} y={910} scale={2.2} />
-          <Tree x={1610} y={1030} scale={2.1} /><Tree x={1760} y={160} scale={1.7} /><Tree x={2060} y={270} scale={2.2} />
-          <Tree x={2160} y={720} scale={1.8} /><Tree x={150} y={900} scale={1.7} /><Tree x={700} y={1100} scale={2} /><Tree x={1800} y={1170} scale={2} />
-          <Bush x={1030} y={250} scale={1.6} /><Bush x={1250} y={470} scale={2} /><Bush x={1430} y={630} scale={1.6} />
-          <Bush x={1080} y={1110} scale={2} /><Bush x={2020} y={500} scale={1.6} /><Bush x={320} y={860} scale={2} /><Bush x={1860} y={940} scale={2} />
-          <Rock x={560} y={240} scale={2} /><Rock x={1060} y={360} scale={1.6} /><Rock x={1650} y={860} scale={2} /><Rock x={920} y={1160} scale={1.6} />
-          <Flower x={270} y={310} /><Flower x={600} y={310} /><Flower x={960} y={260} /><Flower x={1220} y={820} /><Flower x={1540} y={1040} /><Flower x={1840} y={180} />
-
-          <path d={trailPath} fill="none" stroke="#8b6b38" strokeWidth="34" strokeLinecap="round" strokeLinejoin="round" opacity=".32" />
-          <path d={trailPath} fill="none" stroke="url(#trail)" strokeWidth="26" strokeLinecap="round" strokeLinejoin="round" />
-          <path d={trailPath} fill="none" stroke="#f5dfad" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="2 22" opacity=".9" />
-
-          {tiles.map((tile) => (
-            <g key={tile.index} transform={`translate(${tile.x - 18} ${tile.y - 18})`} filter="url(#tileShadow)">
-              <circle cx="18" cy="18" r="18" fill={tile.type === 'start' ? '#45f27b' : tile.type === 'finish' ? '#ff5555' : '#fffdf5'} stroke="#18233f" strokeWidth="3" />
-              <circle cx="18" cy="18" r="14" fill="none" stroke="#ffffff" strokeWidth="2" opacity=".7" />
-              <text x="18" y="22" textAnchor="middle" fontSize="11" fontWeight="900" fill="#18233f" fontFamily="system-ui, sans-serif">{tile.index + 1}</text>
-            </g>
+          <rect width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#oceanGrad)" />
+          {wavePaths.map((d, i) => (
+            <path key={i} d={d} fill="none" stroke="#ffffff" strokeWidth="2" opacity="0.12" />
           ))}
 
-          <g transform={`translate(${tiles[0].x - 30} ${tiles[0].y - 76})`}><path d="M0 0v45" stroke="#5d3c25" strokeWidth="5" /><path d="M2 0h55l-14 16 14 16H2Z" fill="#45f27b" stroke="#18233f" strokeWidth="3" /><text x="29" y="22" textAnchor="middle" fontSize="11" fontWeight="900" fill="#18233f">START</text></g>
-          <g transform={`translate(${tiles[67].x + 8} ${tiles[67].y - 75})`}><path d="M0 0v45" stroke="#5d3c25" strokeWidth="5" /><path d="M2 0h55l-14 16 14 16H2Z" fill="#ff5555" stroke="#18233f" strokeWidth="3" /><text x="29" y="22" textAnchor="middle" fontSize="11" fontWeight="900" fill="#18233f">FINISH</text></g>
+          <path d={sandPath} fill="url(#sandGrad)" stroke="#8a6a3a" strokeWidth="6" filter="url(#softShadow)" />
+          <path d={grassPath} fill="url(#grassGrad)" stroke="#5f9c3f" strokeWidth="5" />
+
+          <Palm x={120} y={200} scale={1.6} />
+          <Palm x={300} y={150} scale={1.7} />
+          <Tree x={560} y={150} scale={1.5} />
+          <Palm x={1000} y={120} scale={1.4} />
+          <Tree x={1700} y={150} scale={1.6} />
+          <Palm x={2050} y={150} scale={1.7} />
+          <Tree x={130} y={560} scale={1.5} />
+          <Tree x={130} y={780} scale={1.4} />
+          <Rock x={330} y={560} scale={1.3} />
+          <Tree x={150} y={1180} scale={1.7} />
+          <Palm x={1080} y={1200} scale={1.5} />
+          <Bush x={1050} y={660} scale={1.6} />
+          <Tree x={2180} y={650} scale={1.6} />
+          <Rock x={1660} y={860} scale={1.4} />
+          <Flower x={260} y={300} color="#ffea4d" />
+          <Flower x={600} y={300} color="#ff4da6" />
+          <Flower x={960} y={250} color="#ffea4d" />
+          <Flower x={1220} y={820} color="#a64dff" />
+          <Flower x={1540} y={1040} color="#ff4da6" />
+          <Flower x={1840} y={180} color="#4d79ff" />
+
+          {tiles.filter((t) => t.type === 'checkpoint').map((ct) => (
+            <Hut key={`hut-${ct.index}`} x={ct.x} y={ct.y - 46} scale={1.3} />
+          ))}
+
+          <path d={trailPath} fill="none" stroke="#8b6b38" strokeWidth="30" strokeLinecap="round" opacity=".28" />
+          <path d={trailPath} fill="none" stroke="url(#trailGrad)" strokeWidth="22" strokeLinecap="round" />
+          <path d={trailPath} fill="none" stroke="#fff6df" strokeWidth="5" strokeLinecap="round" strokeDasharray="1 20" opacity=".85" />
+
+          {tiles.map((tile) => {
+            const style = TYPE_STYLE[tile.type] || TYPE_STYLE.normal;
+            const size = (tile.type === 'start' || tile.type === 'finish') ? 42 : 34;
+            return (
+              <g key={tile.index} transform={`translate(${tile.x} ${tile.y})`} filter="url(#tileShadow)">
+                <rect x={-size / 2} y={-size / 2} width={size} height={size} rx={10} fill={style.fill} stroke={OUTLINE} strokeWidth={3.5} />
+                {style.icon ? (
+                  <text x="0" y="5" textAnchor="middle" fontSize={16} fontWeight={900} fill={style.light ? '#fff' : OUTLINE} fontFamily="Fredoka One, cursive">{style.icon}</text>
+                ) : (
+                  <text x="0" y="4" textAnchor="middle" fontSize={11} fontWeight={900} fill={OUTLINE} fontFamily="Nunito, sans-serif">{tile.index + 1}</text>
+                )}
+              </g>
+            );
+          })}
+
+          <Dock x={startTile.x + 70} y={startTile.y + 30} />
+          <Castle x={finishTile.x - 70} y={finishTile.y - 30} />
 
           {Object.entries(positions).map(([teamId, tileIndex], idx) => {
             const tile = tiles[tileIndex] || tiles[0];
-            return <g key={teamId} transform={`translate(${tile.x - 13} ${tile.y - 26})`}>
-              <circle cx="13" cy="9" r="8" fill={colors[idx % colors.length]} stroke="#18233f" strokeWidth="2.5" />
-              <circle cx="13" cy="9" r="3" fill="#fff" opacity=".8" />
-              <path d="M13 18v13M5 24h16M13 31l-7 7M13 31l7 7" stroke="#18233f" strokeWidth="2.5" strokeLinecap="round" />
-            </g>;
+            const offset = idx % 2 === 0 ? -16 : 16;
+            return (
+              <Stickman
+                key={teamId}
+                color={TEAM_COLORS[idx % TEAM_COLORS.length]}
+                x={tile.x + offset}
+                y={tile.y - 30}
+              />
+            );
           })}
         </svg>
       </div>
 
-      <div className="absolute bottom-5 left-5 z-20 flex items-center gap-2 rounded-2xl border-2 border-[#18233f] bg-white/90 p-2 shadow-xl backdrop-blur">
-        <button onClick={(e) => zoomAt(zoom * 1.25, e.clientX, e.clientY)} className="h-10 w-10 rounded-xl border-2 border-[#18233f] bg-white text-xl font-black hover:bg-[#ffea4d]" aria-label="Zoom in">+</button>
-        <div className="min-w-14 text-center text-sm font-black text-[#18233f]">{Math.round(zoom * 100)}%</div>
-        <button onClick={(e) => zoomAt(zoom / 1.25, e.clientX, e.clientY)} className="h-10 w-10 rounded-xl border-2 border-[#18233f] bg-white text-xl font-black hover:bg-[#ffea4d]" aria-label="Zoom out">−</button>
-        <button onClick={resetView} className="h-10 rounded-xl border-2 border-[#18233f] bg-white px-3 text-xs font-black hover:bg-[#ffea4d]">Reset</button>
+      <div className="pointer-events-none absolute left-5 top-5 z-20 flex flex-col gap-2">
+        <div className="rounded-2xl border-[3px] border-[#1a1a2e] bg-[#fff8e7] px-4 py-2 shadow-[0_4px_0_#1a1a2e]">
+          <h1 className="font-display text-lg text-[#1a1a2e]">Adventure Island</h1>
+          <p className="text-[11px] font-bold text-[#5b5470]">Race to the castle · {TOTAL_TILES} tiles</p>
+        </div>
+        <div className="rounded-2xl border-[3px] border-[#1a1a2e] bg-[#fff8e7] px-4 py-3 shadow-[0_4px_0_#1a1a2e]">
+          <h2 className="mb-1 font-display text-xs text-[#1a1a2e]">Tile key</h2>
+          <div className="flex flex-col gap-1.5 text-[11px] font-bold text-[#1a1a2e]">
+            <div className="flex items-center gap-2"><span className="flex h-[18px] w-[18px] items-center justify-center rounded-md border-[2.5px] border-[#1a1a2e] bg-[#45f27b] text-[10px]">S</span> Start</div>
+            <div className="flex items-center gap-2"><span className="flex h-[18px] w-[18px] items-center justify-center rounded-md border-[2.5px] border-[#1a1a2e] bg-[#fffdf5] text-[10px]">·</span> Trail</div>
+            <div className="flex items-center gap-2"><span className="flex h-[18px] w-[18px] items-center justify-center rounded-md border-[2.5px] border-[#1a1a2e] bg-[#ffea4d] text-[10px]">★</span> Bonus</div>
+            <div className="flex items-center gap-2"><span className="flex h-[18px] w-[18px] items-center justify-center rounded-md border-[2.5px] border-[#1a1a2e] bg-[#4d79ff] text-[10px] text-white">?</span> Challenge</div>
+            <div className="flex items-center gap-2"><span className="flex h-[18px] w-[18px] items-center justify-center rounded-md border-[2.5px] border-[#1a1a2e] bg-[#ff8c4d] text-[10px]">!</span> Trap</div>
+            <div className="flex items-center gap-2"><span className="flex h-[18px] w-[18px] items-center justify-center rounded-md border-[2.5px] border-[#1a1a2e] bg-[#a64dff] text-[10px] text-white">⌂</span> Checkpoint</div>
+            <div className="flex items-center gap-2"><span className="flex h-[18px] w-[18px] items-center justify-center rounded-md border-[2.5px] border-[#1a1a2e] bg-[#ff5555] text-[10px]">F</span> Finish</div>
+          </div>
+        </div>
       </div>
 
-      <div className="pointer-events-none absolute bottom-5 right-5 z-20 rounded-xl bg-[#18233f]/75 px-3 py-2 text-xs font-bold text-white backdrop-blur">
+      <div className="absolute bottom-5 left-5 z-20 flex items-center gap-2 rounded-2xl border-[3px] border-[#1a1a2e] bg-[#fff8e7] p-2 shadow-[0_4px_0_#1a1a2e]">
+        <button onClick={(e) => zoomAt(zoom * 1.25, e.clientX, e.clientY)} className="h-10 w-10 rounded-xl border-[3px] border-[#1a1a2e] bg-white text-xl font-black hover:bg-[#ffea4d]" aria-label="Zoom in">+</button>
+        <div className="min-w-14 text-center text-sm font-black text-[#1a1a2e]">{Math.round(zoom * 100)}%</div>
+        <button onClick={(e) => zoomAt(zoom / 1.25, e.clientX, e.clientY)} className="h-10 w-10 rounded-xl border-[3px] border-[#1a1a2e] bg-white text-xl font-black hover:bg-[#ffea4d]" aria-label="Zoom out">−</button>
+        <button onClick={resetView} className="h-10 rounded-xl border-[3px] border-[#1a1a2e] bg-white px-3 text-xs font-black hover:bg-[#ffea4d]">Reset</button>
+      </div>
+
+      <div className="pointer-events-none absolute bottom-5 right-5 z-20 rounded-xl border-[2px] border-[#1a1a2e] bg-[#fff8e7]/90 px-3 py-2 text-xs font-bold text-[#1a1a2e] backdrop-blur">
         Drag to explore · Scroll to zoom · Double-click to zoom
       </div>
     </div>
