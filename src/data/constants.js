@@ -12,5 +12,32 @@ export const TEAM_COLORS = [
   '#ffea4d',
   '#a64dff',
   '#ff8c4d',
-  '#ff4da6',
+];
+
+// The engine only knows these game types; the actual prompts live in the event content pack.
+export const MINI_GAMES = [
+  {
+    id: 'rapid-shot',
+    label: 'Rapid Shot',
+    description: 'Answer before the timer runs out. Faster correct answers score more.',
+    timeLimit: 12,
+  },
+  {
+    id: 'quick-fire',
+    label: 'Quick Fire',
+    description: 'One question. One shot. Be the first team to lock the correct answer.',
+    timeLimit: 10,
+  },
+  {
+    id: 'brain-blitz',
+    label: 'Brain Blitz',
+    description: 'Think fast and steal the top spot for the next round.',
+    timeLimit: 12,
+  },
+  {
+    id: 'sprint-trivia',
+    label: 'Sprint Trivia',
+    description: 'A short trivia sprint decides who rolls first next round.',
+    timeLimit: 10,
+  },
 ];
