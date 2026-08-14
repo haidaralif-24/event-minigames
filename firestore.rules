@@ -4,42 +4,20 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function isHost() { return signedIn() && request.auth.token.email == 'host@event.app'; }
-    function isTeam() {
-      return signedIn() && request.auth.token.email in [
-        'team1@event.app', 'team2@event.app', 'team3@event.app',
-        'team4@event.app', 'team5@event.app', 'team6@event.app'
-      ];
-    }
+    function isTeam() { return signedIn() && request.auth.token.email in ['team1@event.app', 'team2@event.app', 'team3@event.app', 'team4@event.app', 'team5@event.app', 'team6@event.app']; }
     function myTeamId() {
-      return request.auth.token.email == 'team1@event.app' ? 'team-1' :
-        request.auth.token.email == 'team2@event.app' ? 'team-2' :
-        request.auth.token.email == 'team3@event.app' ? 'team-3' :
-        request.auth.token.email == 'team4@event.app' ? 'team-4' :
-        request.auth.token.email == 'team5@event.app' ? 'team-5' :
-        request.auth.token.email == 'team6@event.app' ? 'team-6' : '';
+      return request.auth.token.email == 'team1@event.app' ? 'team-1' : request.auth.token.email == 'team2@event.app' ? 'team-2' : request.auth.token.email == 'team3@event.app' ? 'team-3' : request.auth.token.email == 'team4@event.app' ? 'team-4' : request.auth.token.email == 'team5@event.app' ? 'team-5' : request.auth.token.email == 'team6@event.app' ? 'team-6' : '';
     }
     function canClaimOwnTeam() {
       let existingTeam = resource.data.teams.get(myTeamId(), null);
       let existingLastSeenAt = existingTeam == null ? 0 : existingTeam.get('lastSeenAt', 0);
       let existingUid = existingTeam == null ? '' : existingTeam.get('uid', '');
-      return isTeam()
-        && resource.data.phase == 'lobby'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teams'])
-        && request.resource.data.teams.diff(resource.data.teams).affectedKeys().hasOnly([myTeamId()])
-        && request.resource.data.teams[myTeamId()].uid == request.auth.uid
-        && (existingTeam == null || existingUid == request.auth.uid || request.time.toMillis() - existingLastSeenAt >= 30000);
+      return isTeam() && resource.data.phase == 'lobby' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teams']) && request.resource.data.teams.diff(resource.data.teams).affectedKeys().hasOnly([myTeamId()]) && request.resource.data.teams[myTeamId()].uid == request.auth.uid && (existingTeam == null || existingUid == request.auth.uid || request.time.toMillis() - existingLastSeenAt >= 30000);
     }
     function canTouchOwnTeam() {
-      return isTeam()
-        && myTeamId() in resource.data.teams.keys()
-        && resource.data.teams[myTeamId()].uid == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teams'])
-        && request.resource.data.teams.diff(resource.data.teams).affectedKeys().hasOnly([myTeamId()])
-        && request.resource.data.teams[myTeamId()].uid == request.auth.uid
-        && request.resource.data.teams[myTeamId()].sessionId == resource.data.teams[myTeamId()].sessionId;
+      return isTeam() && myTeamId() in resource.data.teams.keys() && resource.data.teams[myTeamId()].uid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teams']) && request.resource.data.teams.diff(resource.data.teams).affectedKeys().hasOnly([myTeamId()]) && request.resource.data.teams[myTeamId()].uid == request.auth.uid && request.resource.data.teams[myTeamId()].sessionId == resource.data.teams[myTeamId()].sessionId;
     }
     function ownsTeam() { return isTeam() && myTeamId() in resource.data.teams.keys() && resource.data.teams[myTeamId()].uid == request.auth.uid; }
-
     function canSubmitAnswer() {
       let oldConfig = resource.data.phase == 'opening' ? resource.data.opening : resource.data.minigame;
       let newConfig = request.resource.data.phase == 'opening' ? request.resource.data.opening : request.resource.data.minigame;
@@ -49,25 +27,8 @@ service cloud.firestore {
       let answer = newAnswers.get(myTeamId(), null);
       let oldScore = oldConfig.scores.get(myTeamId(), 0);
       let newScore = newConfig.scores.get(myTeamId(), 0);
-      return ownsTeam()
-        && resource.data.phase in ['opening', 'minigame']
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([resource.data.phase])
-        && newConfig.questionIndex == questionIndex
-        && newConfig.questionIds == oldConfig.questionIds
-        && newConfig.startedAt == oldConfig.startedAt
-        && newConfig.timeLimit == oldConfig.timeLimit
-        && newConfig.questionCount == oldConfig.questionCount
-        && newConfig.scores.diff(oldConfig.scores).affectedKeys().hasOnly([myTeamId()])
-        && newAnswers.diff(oldAnswers).affectedKeys().hasOnly([myTeamId()])
-        && !(myTeamId() in oldAnswers.keys())
-        && myTeamId() in newAnswers.keys()
-        && answer.uid == request.auth.uid
-        && answer.optionIndex >= 0 && answer.optionIndex <= 3
-        && answer.points >= 0 && answer.points <= 250
-        && newScore == oldScore + answer.points
-        && request.time.toMillis() <= oldConfig.startedAt.toMillis() + oldConfig.timeLimit * 1000 + 500;
+      return ownsTeam() && resource.data.phase in ['opening', 'minigame'] && request.resource.data.diff(resource.data).affectedKeys().hasOnly([resource.data.phase]) && newConfig.questionIndex == questionIndex && newConfig.questionIds == oldConfig.questionIds && newConfig.startedAt == oldConfig.startedAt && newConfig.timeLimit == oldConfig.timeLimit && newConfig.questionCount == oldConfig.questionCount && newConfig.scores.diff(oldConfig.scores).affectedKeys().hasOnly([myTeamId()]) && newAnswers.diff(oldAnswers).affectedKeys().hasOnly([myTeamId()]) && !(myTeamId() in oldAnswers.keys()) && myTeamId() in newAnswers.keys() && answer.uid == request.auth.uid && answer.optionIndex >= 0 && answer.optionIndex <= 3 && answer.points >= 0 && answer.points <= 250 && newScore == oldScore + answer.points && request.time.toMillis() <= oldConfig.startedAt.toMillis() + oldConfig.timeLimit * 1000 + 500;
     }
-
     function canRollTwoDice() {
       let oldPosition = resource.data.boardPositions.get(myTeamId(), 0);
       let newPosition = request.resource.data.boardPositions.get(myTeamId(), 0);
@@ -78,22 +39,8 @@ service cloud.firestore {
       let activeIndex = resource.data.activeTeamIndex;
       let nextIndex = (activeIndex + 1) % order.size();
       let completedRound = nextIndex == 0;
-      return ownsTeam()
-        && resource.data.phase == 'playing'
-        && resource.data.activeTeamId == myTeamId()
-        && request.resource.data.dice.status == 'rolled'
-        && request.resource.data.dice.teamId == myTeamId()
-        && die1 >= 1 && die1 <= 6 && die2 >= 1 && die2 <= 6 && total == die1 + die2
-        && request.resource.data.dice.rolledAt <= request.time.toMillis()
-        && request.resource.data.boardPositions.diff(resource.data.boardPositions).affectedKeys().hasOnly([myTeamId()])
-        && newPosition >= oldPosition && newPosition <= 66 && newPosition <= oldPosition + total
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['boardPositions', 'dice', 'phase', 'activeTeamIndex', 'activeTeamId', 'minigame', 'round', 'winner', 'rankings', 'finishedAt'])
-        && (request.resource.data.phase == 'finished' || request.resource.data.phase == 'minigame' || request.resource.data.phase == 'playing')
-        && (request.resource.data.phase == 'finished' ? newPosition == 66 && request.resource.data.winner == myTeamId() :
-            completedRound ? request.resource.data.phase == 'minigame' && request.resource.data.activeTeamId == null :
-            request.resource.data.phase == 'playing' && request.resource.data.activeTeamIndex == nextIndex && request.resource.data.activeTeamId == order[nextIndex] && request.resource.data.round == resource.data.round);
+      return ownsTeam() && resource.data.phase == 'playing' && resource.data.activeTeamId == myTeamId() && request.resource.data.dice.status == 'rolled' && request.resource.data.dice.teamId == myTeamId() && die1 >= 1 && die1 <= 6 && die2 >= 1 && die2 <= 6 && total == die1 + die2 && request.resource.data.dice.rolledAt <= request.time.toMillis() && request.resource.data.boardPositions.diff(resource.data.boardPositions).affectedKeys().hasOnly([myTeamId()]) && newPosition >= max(0, oldPosition - 4) && newPosition <= 66 && newPosition <= oldPosition + total && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['boardPositions', 'dice', 'phase', 'activeTeamIndex', 'activeTeamId', 'minigame', 'round', 'winner', 'rankings', 'finishedAt']) && (request.resource.data.phase == 'finished' || request.resource.data.phase == 'minigame' || request.resource.data.phase == 'playing') && (request.resource.data.phase == 'finished' ? newPosition == 66 && request.resource.data.winner == myTeamId() : completedRound ? request.resource.data.phase == 'minigame' && request.resource.data.activeTeamId == null : request.resource.data.phase == 'playing' && request.resource.data.activeTeamIndex == nextIndex && request.resource.data.activeTeamId == order[nextIndex] && request.resource.data.round == resource.data.round);
     }
-
     match /gameState/current {
       allow get: if signedIn();
       allow list: if false;
