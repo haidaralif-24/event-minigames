@@ -308,8 +308,9 @@ export default function Board() {
   }, []);
 
   const trailPath = useMemo(() => catmullRom(PATH_POINTS), []);
-  const sandPath = useMemo(() => smoothBlob(blobPoints(1120, 650, 720, 26, 0.4)), []);
-  const grassPath = useMemo(() => smoothBlob(blobPoints(1120, 650, 680, 26, 1.1)), []);
+  // Keep the island fully inside the map bounds so its coastline is not clipped by the SVG viewport.
+  const sandPath = useMemo(() => smoothBlob(blobPoints(1120, 650, 620, 26, 0.4)), []);
+  const grassPath = useMemo(() => smoothBlob(blobPoints(1120, 650, 580, 26, 1.1)), []);
   const wavePaths = useMemo(
     () => Array.from({ length: Math.ceil((1280 - 760) / 70) + 1 }, (_, i) => {
       const r = 760 + i * 70;
