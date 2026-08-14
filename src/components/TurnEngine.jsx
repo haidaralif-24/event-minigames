@@ -14,8 +14,8 @@ const SESSION_TIMEOUT_MS = 30000;
 
 const EMPTY_GAME = {
   phase: 'lobby', round: 1, turnOrder: [], activeTeamIndex: 0, activeTeamId: null,
-  boardPositions: {}, teams: {}, winner: null, rankings: [],
-  opening: null, minigame: null, dice: { status: 'waiting', die1: null, die2: null, total: null, teamId: null, rolledAt: null },
+  boardPositions: {}, teams: {}, winner: null, rankings: [], opening: null, minigame: null,
+  dice: { status: 'waiting', die1: null, die2: null, total: null, teamId: null, rolledAt: null },
 };
 
 function shuffle(items) {
@@ -27,31 +27,20 @@ function shuffle(items) {
   return result;
 }
 
-function questionById(id) {
-  return EVENT_QUESTIONS.find((question) => question.id === id) || null;
-}
-
-function getNextIndex(order, currentIndex) {
-  return order.length ? (currentIndex + 1) % order.length : 0;
-}
-
+function questionById(id) { return EVENT_QUESTIONS.find((question) => question.id === id) || null; }
+function getNextIndex(order, currentIndex) { return order.length ? (currentIndex + 1) % order.length : 0; }
 function rankScores(scores, previousOrder = []) {
   const previousRank = Object.fromEntries(previousOrder.map((id, index) => [id, index]));
   return Object.entries(scores || {})
     .sort(([a, scoreA], [b, scoreB]) => scoreB - scoreA || (previousRank[a] ?? 99) - (previousRank[b] ?? 99) || a.localeCompare(b))
     .map(([teamId], index) => ({ teamId, position: index + 1 }));
 }
-
 function buildRankingsByPosition(positions) {
-  return Object.entries(positions || {})
-    .sort(([, a], [, b]) => b - a)
-    .map(([teamId], index) => ({ teamId, position: index + 1 }));
+  return Object.entries(positions || {}).sort(([, a], [, b]) => b - a).map(([teamId], index) => ({ teamId, position: index + 1 }));
 }
-
 function chooseRoundGame() {
-  const template = MINI_GAMES[Math.floor(Math.random() * MINI_GAMES.length)] || { id: 'rapid', label: 'Rapid Shot', description: 'Answer fast.', timeLimit: ROUND_MINIGAME_TIME_LIMIT };
-  const shuffled = shuffle(EVENT_QUESTIONS);
-  const question = shuffled.find((item) => template.questionIds?.includes(item.id)) || shuffled[0];
+  const template = MINI_GAMES[Math.floor(Math.random() * MINI_GAMES.length)] || MINI_GAMES[0];
+  const question = shuffle(EVENT_QUESTIONS)[0];
   return { template, question };
 }
 
@@ -70,8 +59,7 @@ export function useGameEngine() {
       unsubscribeSnapshot();
       unsubscribeSnapshot = onSnapshot(doc(db, 'gameState', 'current'), (snap) => {
         if (cancelled) return;
-        setGameExists(snap.exists());
-        setGameLoaded(true);
+        setGameExists(snap.exists()); setGameLoaded(true);
         if (snap.exists()) setGame(snap.data());
       }, (error) => { console.error('game state subscription failed:', error); setGameLoaded(true); });
     };
@@ -138,8 +126,9 @@ export function useGameEngine() {
 
   const submitAnswer = useCallback(async (teamId, optionIndex) => {
     const user = auth.currentUser;
+    if (!user || !['opening', 'minigame'].includes(game.phase)) return;
     const phaseConfig = game.phase === 'opening' ? game.opening : game.minigame;
-    if (!user || !phaseConfig || !['opening', 'minigame'].includes(game.phase)) return;
+    if (!phaseConfig) return;
     const questionId = phaseConfig.questionIds?.[phaseConfig.questionIndex];
     const question = questionById(questionId);
     if (!question || phaseConfig.answers?.[phaseConfig.questionIndex]?.[teamId]) return;
@@ -157,7 +146,7 @@ export function useGameEngine() {
         const elapsed = Math.max(0, (Date.now() - started) / 1000);
         if (elapsed > (config.timeLimit || OPENING_TIME_LIMIT) + 0.5) return;
         const correct = optionIndex === q.answerIndex;
-        const points = correct ? Math.max(1, 100 + Math.round((config.timeLimit - elapsed) * 10)) : 0;
+        const points = correct ? Math.max(1, 100 + Math.round(((config.timeLimit || 10) - elapsed) * 10)) : 0;
         const score = config.scores?.[teamId] || 0;
         transaction.update(ref, {
           [`${current.phase}.answers.${config.questionIndex}.${teamId}`]: { uid: user.uid, optionIndex, correct, points, elapsed: Number(elapsed.toFixed(2)), answeredAt: Date.now() },
@@ -174,7 +163,7 @@ export function useGameEngine() {
     if (nextIndex >= config.questionCount) {
       if (game.phase === 'opening') {
         const rankings = rankScores(config.scores, []);
-        await updateDoc(doc(db, 'gameState', 'current'), { phase: 'opening-results', rankings, 'opening.finishedAt': Date.now() });
+        await updateDoc(doc(db, 'gameState', 'current'), { phase: 'opening-results', turnOrder: rankings.map((r) => r.teamId), rankings, 'opening.finishedAt': Date.now() });
       } else {
         const rankings = rankScores(config.scores, game.turnOrder);
         await updateDoc(doc(db, 'gameState', 'current'), { phase: 'minigame-results', rankings, 'minigame.finishedAt': Date.now(), 'minigame.status': 'finished' });
@@ -185,8 +174,13 @@ export function useGameEngine() {
   }, [game]);
 
   const beginBoard = useCallback(async () => {
-    if (!['opening-results', 'turn-order'].includes(game.phase) || !game.turnOrder?.length) return;
-    await updateDoc(doc(db, 'gameState', 'current'), { phase: 'playing', round: 1, activeTeamIndex: 0, activeTeamId: game.turnOrder[0], dice: { status: 'waiting', die1: null, die2: null, total: null, teamId: game.turnOrder[0], rolledAt: null } });
+    if (game.phase !== 'opening-results' || !game.turnOrder?.length) return;
+    await updateDoc(doc(db, 'gameState', 'current'), { phase: 'turn-order' });
+  }, [game.phase, game.turnOrder]);
+
+  const startNextRound = useCallback(async () => {
+    if (game.phase !== 'round-transition' || !game.turnOrder?.length) return;
+    await updateDoc(doc(db, 'gameState', 'current'), { phase: 'playing', activeTeamIndex: 0, activeTeamId: game.turnOrder[0], dice: { status: 'waiting', die1: null, die2: null, total: null, teamId: game.turnOrder[0], rolledAt: null }, minigame: null });
   }, [game.phase, game.turnOrder]);
 
   const prepareNextRound = useCallback(async () => {
@@ -194,11 +188,6 @@ export function useGameEngine() {
     const nextOrder = (game.rankings || []).map((r) => r.teamId);
     await updateDoc(doc(db, 'gameState', 'current'), { phase: 'round-transition', turnOrder: nextOrder, activeTeamIndex: 0, activeTeamId: nextOrder[0], round: (game.round || 1) + 1 });
   }, [game.phase, game.turnOrder, game.rankings, game.round]);
-
-  const startNextRound = useCallback(async () => {
-    if (game.phase !== 'round-transition' || !game.turnOrder?.length) return;
-    await updateDoc(doc(db, 'gameState', 'current'), { phase: 'playing', activeTeamIndex: 0, activeTeamId: game.turnOrder[0], dice: { status: 'waiting', die1: null, die2: null, total: null, teamId: game.turnOrder[0], rolledAt: null }, minigame: null });
-  }, [game.phase, game.turnOrder]);
 
   const rollDice = useCallback(async (teamId) => {
     const user = auth.currentUser;
@@ -240,8 +229,5 @@ export function useGameEngine() {
     await setDoc(doc(db, 'gameState', 'current'), { ...EMPTY_GAME, teams: {} });
   }, []);
 
-  return {
-    game, gameLoaded, gameExists, initLobby, joinTeam, touchTeamSession, startGame,
-    submitAnswer, advanceQuestion, beginBoard, prepareNextRound, startNextRound, rollDice, resetForNewGame,
-  };
+  return { game, gameLoaded, gameExists, initLobby, joinTeam, touchTeamSession, startGame, submitAnswer, advanceQuestion, beginBoard, prepareNextRound, startNextRound, rollDice, resetForNewGame };
 }
