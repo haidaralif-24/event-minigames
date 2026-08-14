@@ -13,59 +13,89 @@ const MAX_ZOOM = 3.2;
 const OUTLINE = '#1a1a2e';
 const ASPECT = 1.6;
 
-const PATH_POINTS = [
-  { x: 180, y: 1000 }, { x: 250, y: 840 }, { x: 210, y: 660 },
-  { x: 310, y: 500 }, { x: 470, y: 410 }, { x: 660, y: 440 },
-  { x: 790, y: 570 }, { x: 840, y: 750 }, { x: 780, y: 920 },
-  { x: 910, y: 1050 }, { x: 1110, y: 1070 }, { x: 1300, y: 1010 },
-  { x: 1440, y: 880 }, { x: 1470, y: 700 }, { x: 1410, y: 540 },
-  { x: 1300, y: 420 }, { x: 1400, y: 280 }, { x: 1590, y: 210 },
-  { x: 1780, y: 260 }, { x: 1910, y: 380 }, { x: 1940, y: 550 },
-  { x: 1880, y: 700 }, { x: 1950, y: 850 }, { x: 2060, y: 1000 },
-  { x: 2160, y: 1130 },
-];
+/* ─── Spiral layout: concentric elliptical loops spiralling inward ─── */
+const CX = 1120;  // island centre
+const CY = 650;
 
-const TYPE_STYLE = {
-  start: { fill: '#45f27b', icon: 'S' },
-  finish: { fill: '#ff5555', icon: 'F' },
-  normal: { fill: '#fffdf5', icon: null },
-  bonus: { fill: '#ffea4d', icon: '★' },
-  challenge: { fill: '#4d79ff', icon: '?', light: true },
-  penalty: { fill: '#ff8c4d', icon: '!' },
-  checkpoint: { fill: '#a64dff', icon: '⌂', light: true },
-};
+// Outer loop: tiles 0-33 (34 tiles), clockwise starting bottom-right
+const OUTER_RX = 530;
+const OUTER_RY = 440;
+const OUTER_COUNT = 34;
+const OUTER_START_ANGLE = Math.PI * 0.42; // bottom-right start (~75°)
 
-function buildPath(points) {
-  const segments = [];
-  let totalLength = 0;
-  for (let i = 0; i < points.length - 1; i += 1) {
-    const a = points[i];
-    const b = points[i + 1];
-    const length = Math.hypot(b.x - a.x, b.y - a.y);
-    segments.push({ a, b, length, start: totalLength });
-    totalLength += length;
+// Inner loop: tiles 36-62 (27 tiles), clockwise
+const INNER_RX = 310;
+const INNER_RY = 240;
+const INNER_COUNT = 27;
+const INNER_START_ANGLE = Math.PI * 0.5; // bottom
+
+// Transition bridge: tiles 34-35 (2 tiles linking outer→inner)
+const BRIDGE_COUNT = 2;
+
+// Final approach: tiles 63-66 (4 tiles spiralling to centre finish)
+const FINAL_COUNT = 4;
+const FINAL_RX = 140;
+const FINAL_RY = 110;
+
+function buildSpiralPositions(total) {
+  const positions = [];
+
+  // --- Outer loop (clockwise) ---
+  for (let i = 0; i < OUTER_COUNT && positions.length < total; i++) {
+    const angle = OUTER_START_ANGLE + (i / OUTER_COUNT) * Math.PI * 2;
+    positions.push({
+      x: CX + OUTER_RX * Math.cos(angle),
+      y: CY + OUTER_RY * Math.sin(angle),
+    });
   }
-  return { segments, totalLength };
+
+  // --- Bridge: outer→inner transition ---
+  if (positions.length < total) {
+    const lastOuter = positions[positions.length - 1];
+    const firstInnerAngle = INNER_START_ANGLE;
+    const firstInner = {
+      x: CX + INNER_RX * Math.cos(firstInnerAngle),
+      y: CY + INNER_RY * Math.sin(firstInnerAngle),
+    };
+    for (let i = 1; i <= BRIDGE_COUNT && positions.length < total; i++) {
+      const t = i / (BRIDGE_COUNT + 1);
+      positions.push({
+        x: lastOuter.x + (firstInner.x - lastOuter.x) * t,
+        y: lastOuter.y + (firstInner.y - lastOuter.y) * t,
+      });
+    }
+  }
+
+  // --- Inner loop (clockwise) ---
+  for (let i = 0; i < INNER_COUNT && positions.length < total; i++) {
+    const angle = INNER_START_ANGLE + (i / INNER_COUNT) * Math.PI * 2;
+    positions.push({
+      x: CX + INNER_RX * Math.cos(angle),
+      y: CY + INNER_RY * Math.sin(angle),
+    });
+  }
+
+  // --- Final approach to centre ---
+  for (let i = 0; i < FINAL_COUNT && positions.length < total; i++) {
+    const t = (i + 1) / (FINAL_COUNT + 1);
+    const angle = INNER_START_ANGLE - Math.PI * 0.1 + (i / FINAL_COUNT) * Math.PI * 0.6;
+    const rx = FINAL_RX * (1 - t * 0.7);
+    const ry = FINAL_RY * (1 - t * 0.7);
+    positions.push({
+      x: CX + rx * Math.cos(angle),
+      y: CY + ry * Math.sin(angle),
+    });
+  }
+
+  // Pad any remaining with centre
+  while (positions.length < total) {
+    positions.push({ x: CX, y: CY });
+  }
+
+  return positions;
 }
 
-const BOARD_PATH = buildPath(PATH_POINTS);
-
-function pointAtDistance(distance) {
-  const d = Math.max(0, Math.min(distance, BOARD_PATH.totalLength));
-  const segment = BOARD_PATH.segments.find(({ start, length }) => d <= start + length) || BOARD_PATH.segments.at(-1);
-  const t = segment.length === 0 ? 0 : (d - segment.start) / segment.length;
-  return {
-    x: segment.a.x + (segment.b.x - segment.a.x) * t,
-    y: segment.a.y + (segment.b.y - segment.a.y) * t,
-  };
-}
-
-function buildTilePositions(total) {
-  return Array.from({ length: total }, (_, index) =>
-    pointAtDistance(total <= 1 ? 0 : (index / (total - 1)) * BOARD_PATH.totalLength),
-  );
-}
-
+/* ─── Smooth trail path from tile positions ─── */
 function catmullRom(pts) {
   let d = '';
   for (let i = 0; i < pts.length - 1; i += 1) {
@@ -82,6 +112,16 @@ function catmullRom(pts) {
   }
   return d;
 }
+
+const TYPE_STYLE = {
+  start: { fill: '#45f27b', icon: 'S' },
+  finish: { fill: '#ff5555', icon: 'F' },
+  normal: { fill: '#fffdf5', icon: null },
+  bonus: { fill: '#ffea4d', icon: '★' },
+  challenge: { fill: '#4d79ff', icon: '?', light: true },
+  penalty: { fill: '#ff8c4d', icon: '!' },
+  checkpoint: { fill: '#a64dff', icon: '⌂', light: true },
+};
 
 function blobPoints(cx, cy, r0, n, phase, aspect = ASPECT) {
   const pts = [];
@@ -310,18 +350,20 @@ export default function Board() {
 
   const tiles = useMemo(() => {
     const source = boardTiles.slice(0, TOTAL_TILES);
-    const tilePositions = buildTilePositions(TOTAL_TILES);
+    const tilePositions = buildSpiralPositions(TOTAL_TILES);
     return source.map((tile, index) => ({ ...tile, index, ...tilePositions[index] }));
   }, []);
 
-  const trailPath = useMemo(() => catmullRom(PATH_POINTS), []);
+  // Build trail path through all tile positions using Catmull-Rom spline
+  const trailPath = useMemo(() => catmullRom(tiles.map(t => ({ x: t.x, y: t.y }))), [tiles]);
+
   // Keep the island fully inside the map bounds so its coastline is not clipped by the SVG viewport.
-  const sandPath = useMemo(() => smoothBlob(blobPoints(1120, 650, 620, 26, 0.4)), []);
-  const grassPath = useMemo(() => smoothBlob(blobPoints(1120, 650, 580, 26, 1.1)), []);
+  const sandPath = useMemo(() => smoothBlob(blobPoints(CX, CY, 620, 26, 0.4)), []);
+  const grassPath = useMemo(() => smoothBlob(blobPoints(CX, CY, 580, 26, 1.1)), []);
   const wavePaths = useMemo(
     () => Array.from({ length: Math.ceil((1280 - 760) / 70) + 1 }, (_, i) => {
       const r = 760 + i * 70;
-      return smoothBlob(blobPoints(1120, 650, r, 40, r * 0.02)).replace('Z', '');
+      return smoothBlob(blobPoints(CX, CY, r, 40, r * 0.02)).replace('Z', '');
     }),
     [],
   );
@@ -411,11 +453,13 @@ export default function Board() {
             <Hut key={`hut-${ct.index}`} x={ct.x} y={ct.y - 46} scale={1.3} />
           ))}
 
+          {/* Trail: shadow → fill → dashes */}
           <path d={trailPath} fill="none" stroke="#8b6b38" strokeWidth="30" strokeLinecap="round" opacity=".28" />
           <path d={trailPath} fill="none" stroke="url(#trailGrad)" strokeWidth="22" strokeLinecap="round" />
           <path d={trailPath} fill="none" stroke="#fff6df" strokeWidth="5" strokeLinecap="round" strokeDasharray="1 20" opacity=".85" />
 
-          <Castle x={finishTile.x - 10} y={finishTile.y - 155} />
+          {/* Castle at centre, above the finish tile */}
+          <Castle x={CX} y={CY - 155} />
 
           {tiles.map((tile) => {
             const style = TYPE_STYLE[tile.type] || TYPE_STYLE.normal;
