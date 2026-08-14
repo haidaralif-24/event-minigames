@@ -6,7 +6,7 @@ const TEAM_COLORS = ['#ff4d4d', '#4d79ff', '#4dff79', '#ffea4d', '#a64dff', '#ff
 
 function TeamRow({ teamId, rank, score, position, active }) {
   const color = TEAM_COLORS[Number(teamId.split('-')[1]) - 1];
-  return <div className={`flex items-center gap-3 rounded-2xl border-2 px-3 py-3 ${active ? 'border-[#ff8c4d] bg-[#fff4e8]' : 'border-[#18233f]/15 bg-white'}`}><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#18233f] text-sm font-black text-white">{rank}</div><span className="h-3 w-3 rounded-full" style={{ background: color }} /><div className="flex-1"><p className="font-black text-[#18233f]">Team {TEAM_LABELS[teamId]}</p>{score !== undefined && <p className="text-xs font-semibold text-[#7a8395]">{score} pts{position !== undefined ? ` • Tile ${position + 1} / 30` : ''}</p>}</div>{active && <span className="rounded-full bg-[#ff8c4d] px-2 py-1 text-[10px] font-black uppercase text-white">Turn</span>}</div>;
+  return <div className={`flex items-center gap-3 rounded-2xl border-2 px-3 py-3 ${active ? 'border-[#ff8c4d] bg-[#fff4e8]' : 'border-[#18233f]/15 bg-white'}`}><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#18233f] text-sm font-black text-white">{rank}</div><span className="h-3 w-3 rounded-full" style={{ background: color }} /><div className="flex-1"><p className="font-black text-[#18233f]">Team {TEAM_LABELS[teamId]}</p>{score !== undefined && <p className="text-xs font-semibold text-[#7a8395]">{score} pts{position !== undefined ? ` • Tile ${position + 1} / 67` : ''}</p>}</div>{active && <span className="rounded-full bg-[#ff8c4d] px-2 py-1 text-[10px] font-black uppercase text-white">Turn</span>}</div>;
 }
 
 export default function HostControls() {
