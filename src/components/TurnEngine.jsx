@@ -3,13 +3,15 @@ import { doc, onSnapshot, setDoc, updateDoc, runTransaction, Timestamp } from 'f
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, authPersistenceReady, db } from '../firebase';
 import { RAPID_SHOOTING_QUESTIONS, RAPID_SHOOTING_TIME_LIMIT, RAPID_SHOOTING_QUESTION_COUNT } from '../data/rapidShootingQuestions.js';
+import boardTiles from '../data/boardTiles.json';
 
 const TEAM_IDS = ['team-1', 'team-2', 'team-3', 'team-4', 'team-5', 'team-6'];
-const FINISH_TILE = 29;
+const FINISH_TILE = 66;
 const SESSION_TIMEOUT_MS = 30000;
 const EMPTY_GAME = {
   phase: 'lobby', round: 1, turnOrder: [], activeTeamIndex: 0, activeTeamId: null,
   boardPositions: {}, teams: {}, winner: null, rankings: [], minigame: null,
+  skipNextTurn: {},
   dice: { status: 'waiting', value: null, teamId: null, rolledAt: null },
 };
 
@@ -25,6 +27,22 @@ function shuffle(items) {
 function getRapidQuestion(game, questionIndex) {
   const questionId = game.minigame?.questionIds?.[questionIndex];
   return RAPID_SHOOTING_QUESTIONS.find((question) => question.id === questionId) || null;
+}
+
+function getNextPlayableTurn(turnOrder, activeIndex, skipNextTurn) {
+  if (!turnOrder.length) return { index: 0, skipped: [] };
+  let index = activeIndex;
+  const skipped = [];
+  for (let attempts = 0; attempts < turnOrder.length; attempts += 1) {
+    index = (index + 1) % turnOrder.length;
+    const teamId = turnOrder[index];
+    if (skipNextTurn?.[teamId]) {
+      skipped.push(teamId);
+      continue;
+    }
+    return { index, skipped };
+  }
+  return { index: (activeIndex + 1) % turnOrder.length, skipped };
 }
 
 export function useGameEngine() {
@@ -134,6 +152,7 @@ export function useGameEngine() {
 
     await updateDoc(doc(db, 'gameState', 'current'), {
       phase: 'minigame', boardPositions: positions, turnOrder: [], activeTeamIndex: 0, activeTeamId: null,
+      skipNextTurn: {},
       dice: { status: 'waiting', value: null, teamId: null, rolledAt: null },
       minigame: {
         type: 'rapid-shooting', status: 'playing', questionIndex: 0, questionIds,
@@ -219,6 +238,7 @@ export function useGameEngine() {
     if (game.phase !== 'turn-order' || !game.turnOrder?.length) return;
     await updateDoc(doc(db, 'gameState', 'current'), {
       phase: 'playing', round: 1, activeTeamIndex: 0, activeTeamId: game.turnOrder[0],
+      skipNextTurn: {},
       dice: { status: 'waiting', value: null, teamId: game.turnOrder[0], rolledAt: null },
     });
   }, [game.phase, game.turnOrder]);
@@ -236,12 +256,18 @@ export function useGameEngine() {
         const rollValue = Math.floor(Math.random() * 6) + 1;
         const currentPos = current.boardPositions?.[teamId] ?? 0;
         const newPos = Math.min(currentPos + rollValue, FINISH_TILE);
+        const landedTile = boardTiles[newPos];
         const turnOrder = current.turnOrder || [];
         const activeIndex = current.activeTeamIndex ?? 0;
-        const nextIndex = turnOrder.length ? (activeIndex + 1) % turnOrder.length : 0;
+        const currentSkips = { ...(current.skipNextTurn || {}) };
+        const landedOnTrap = landedTile?.type === 'penalty';
+        if (landedOnTrap) currentSkips[teamId] = true;
+        const { index: nextIndex, skipped } = getNextPlayableTurn(turnOrder, activeIndex, currentSkips);
+        skipped.forEach((skippedTeamId) => { delete currentSkips[skippedTeamId]; });
         const reachedFinish = newPos >= FINISH_TILE;
         transaction.update(gameRef, {
           [`boardPositions.${teamId}`]: newPos,
+          skipNextTurn: currentSkips,
           dice: { status: 'rolled', value: rollValue, teamId, rolledAt: Date.now() },
           ...(reachedFinish
             ? { phase: 'finished', winner: teamId, rankings: Object.entries({ ...(current.boardPositions || {}), [teamId]: newPos }).sort(([, a], [, b]) => b - a).map(([id], index) => ({ teamId: id, position: index + 1 })) }
@@ -255,11 +281,15 @@ export function useGameEngine() {
 
   const nextTurn = useCallback(async () => {
     if (!game.turnOrder?.length) return;
-    const nextIndex = (game.activeTeamIndex + 1) % game.turnOrder.length;
+    const currentSkips = { ...(game.skipNextTurn || {}) };
+    const { index: nextIndex, skipped } = getNextPlayableTurn(game.turnOrder, game.activeTeamIndex, currentSkips);
+    skipped.forEach((teamId) => { delete currentSkips[teamId]; });
     await updateDoc(doc(db, 'gameState', 'current'), {
-      activeTeamIndex: nextIndex, activeTeamId: game.turnOrder[nextIndex], round: nextIndex === 0 ? game.round + 1 : game.round,
+      activeTeamIndex: nextIndex, activeTeamId: game.turnOrder[nextIndex],
+      skipNextTurn: currentSkips,
+      round: nextIndex === 0 ? game.round + 1 : game.round,
     });
-  }, [game.turnOrder, game.activeTeamIndex, game.round]);
+  }, [game.turnOrder, game.activeTeamIndex, game.round, game.skipNextTurn]);
 
   return { game, gameLoaded, gameExists, initLobby, joinTeam, touchTeamSession, startGame, submitRapidAnswer, nextRapidQuestion, finishRapidShooting, advanceToTurnOrder, startBoard, rollDice, nextTurn };
 }
