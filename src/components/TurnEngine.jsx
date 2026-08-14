@@ -255,13 +255,13 @@ export function useGameEngine() {
         if (current.phase !== 'playing' || current.activeTeamId !== teamId || current.dice?.status === 'rolling') return;
         const rollValue = Math.floor(Math.random() * 6) + 1;
         const currentPos = current.boardPositions?.[teamId] ?? 0;
-        const newPos = Math.min(currentPos + rollValue, FINISH_TILE);
-        const landedTile = boardTiles[newPos];
+        const rolledPos = Math.min(currentPos + rollValue, FINISH_TILE);
+        const landedTile = boardTiles[rolledPos];
+        const landedOnTrap = landedTile?.type === 'penalty';
+        const newPos = landedOnTrap ? Math.max(0, rolledPos - 5) : rolledPos;
         const turnOrder = current.turnOrder || [];
         const activeIndex = current.activeTeamIndex ?? 0;
         const currentSkips = { ...(current.skipNextTurn || {}) };
-        const landedOnTrap = landedTile?.type === 'penalty';
-        if (landedOnTrap) currentSkips[teamId] = true;
         const { index: nextIndex, skipped } = getNextPlayableTurn(turnOrder, activeIndex, currentSkips);
         skipped.forEach((skippedTeamId) => { delete currentSkips[skippedTeamId]; });
         const reachedFinish = newPos >= FINISH_TILE;
