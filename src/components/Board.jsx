@@ -186,13 +186,20 @@ function Dock({ x, y }) {
 
 function Castle({ x, y }) {
   return (
-    <g transform={`translate(${x} ${y})`}>
-      <circle cx="0" cy="0" r="92" fill="url(#peakGrad)" stroke="#5a3a20" strokeWidth="6" />
-      <rect x="-28" y="-64" width="56" height="60" fill="#e7ddc8" stroke={OUTLINE} strokeWidth="4" />
-      <path d="M-34-64L0-98L34-64Z" fill="#c9673d" stroke={OUTLINE} strokeWidth="4" />
-      <rect x="-8" y="-30" width="16" height="26" fill="#5a3a20" stroke={OUTLINE} strokeWidth="2.5" />
-      <path d="M0 -98v-22" stroke={OUTLINE} strokeWidth="3" />
-      <path d="M0 -120h26l-13 13z" fill="#ff5555" stroke={OUTLINE} strokeWidth="2.5" />
+    <g transform={`translate(${x} ${y})`} filter="url(#softShadow)">
+      <circle cx="0" cy="8" r="112" fill="#ffdf62" opacity=".18" />
+      <circle cx="0" cy="0" r="98" fill="url(#peakGrad)" stroke="#5a3a20" strokeWidth="7" />
+      <circle cx="0" cy="0" r="84" fill="none" stroke="#ffe36b" strokeWidth="6" strokeDasharray="10 12" opacity=".9" />
+      <path d="M-70-78L-42-105 0-118 42-105 70-78" fill="none" stroke="#fff3a6" strokeWidth="7" strokeLinecap="round" opacity=".95" />
+      <rect x="-31" y="-62" width="62" height="66" rx="4" fill="#f5ead0" stroke={OUTLINE} strokeWidth="4" />
+      <path d="M-38-62L0-102 38-62Z" fill="#d94848" stroke={OUTLINE} strokeWidth="4" />
+      <path d="M-35-62V-78H-16V-62M16-62V-78H35V-62" fill="#d94848" stroke={OUTLINE} strokeWidth="4" />
+      <rect x="-9" y="-30" width="18" height="34" rx="8" fill="#5a3a20" stroke={OUTLINE} strokeWidth="2.5" />
+      <path d="M0-102V-135" stroke={OUTLINE} strokeWidth="4" strokeLinecap="round" />
+      <path d="M0-134L34-124 0-110Z" fill="#ff5555" stroke={OUTLINE} strokeWidth="2.5" />
+      <circle cx="-58" cy="-88" r="7" fill="#fff3a6" stroke={OUTLINE} strokeWidth="2" />
+      <circle cx="58" cy="-88" r="7" fill="#fff3a6" stroke={OUTLINE} strokeWidth="2" />
+      <path d="M-112 18C-78 34-48 39-18 35M112 18C78 34 48 39 18 35" fill="none" stroke="#fff3a6" strokeWidth="6" strokeLinecap="round" opacity=".9" />
     </g>
   );
 }
@@ -410,14 +417,24 @@ export default function Board() {
 
           {tiles.map((tile) => {
             const style = TYPE_STYLE[tile.type] || TYPE_STYLE.normal;
-            const size = (tile.type === 'start' || tile.type === 'finish') ? 42 : 34;
+            const isFinish = tile.index === TOTAL_TILES - 1;
+            const size = tile.type === 'start' ? 42 : isFinish ? 62 : 34;
             return (
               <g key={tile.index} transform={`translate(${tile.x} ${tile.y})`} filter="url(#tileShadow)">
-                <rect x={-size / 2} y={-size / 2} width={size} height={size} rx={10} fill={style.fill} stroke={OUTLINE} strokeWidth={3.5} />
+                {isFinish && (
+                  <>
+                    <circle cx="0" cy="0" r="48" fill="#ffe36b" opacity=".28" />
+                    <circle cx="0" cy="0" r="39" fill="none" stroke="#fff3a6" strokeWidth="5" strokeDasharray="8 7" />
+                  </>
+                )}
+                <rect x={-size / 2} y={-size / 2} width={size} height={size} rx={isFinish ? 18 : 10} fill={style.fill} stroke={OUTLINE} strokeWidth={isFinish ? 5 : 3.5} />
                 {style.icon ? (
-                  <text x="0" y="5" textAnchor="middle" fontSize={16} fontWeight={900} fill={style.light ? '#fff' : OUTLINE} fontFamily="Fredoka One, cursive">{style.icon}</text>
+                  <text x="0" y={isFinish ? 7 : 5} textAnchor="middle" fontSize={isFinish ? 24 : 16} fontWeight={900} fill={style.light ? '#fff' : OUTLINE} fontFamily="Fredoka One, cursive">{isFinish ? '★' : style.icon}</text>
                 ) : (
                   <text x="0" y="4" textAnchor="middle" fontSize={11} fontWeight={900} fill={OUTLINE} fontFamily="Nunito, sans-serif">{tile.index + 1}</text>
+                )}
+                {isFinish && (
+                  <text x="0" y="39" textAnchor="middle" fontSize="13" fontWeight="900" fill={OUTLINE} fontFamily="Nunito, sans-serif">FINISH</text>
                 )}
               </g>
             );
