@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import boardTiles from '../data/boardTiles.json';
 import { TEAM_COLORS } from '../data/constants';
 
-const TOTAL_TILES = 68;
+const TOTAL_TILES = 67;
 const MAP_WIDTH = 2240;
 const MAP_HEIGHT = 1300;
 const MIN_ZOOM = 0.85;
@@ -415,33 +415,51 @@ export default function Board() {
           <path d={trailPath} fill="none" stroke="url(#trailGrad)" strokeWidth="22" strokeLinecap="round" />
           <path d={trailPath} fill="none" stroke="#fff6df" strokeWidth="5" strokeLinecap="round" strokeDasharray="1 20" opacity=".85" />
 
+          <Castle x={finishTile.x - 10} y={finishTile.y - 155} />
+
           {tiles.map((tile) => {
             const style = TYPE_STYLE[tile.type] || TYPE_STYLE.normal;
+            const isStart = tile.index === 0;
             const isFinish = tile.index === TOTAL_TILES - 1;
-            const size = tile.type === 'start' ? 42 : isFinish ? 62 : 34;
+            const size = isStart ? 66 : isFinish ? 82 : 34;
             return (
               <g key={tile.index} transform={`translate(${tile.x} ${tile.y})`} filter="url(#tileShadow)">
-                {isFinish && (
+                {isStart && (
                   <>
-                    <circle cx="0" cy="0" r="48" fill="#ffe36b" opacity=".28" />
-                    <circle cx="0" cy="0" r="39" fill="none" stroke="#fff3a6" strokeWidth="5" strokeDasharray="8 7" />
+                    <circle cx="0" cy="0" r="58" fill="#45f27b" opacity=".22" />
+                    <circle cx="0" cy="0" r="50" fill="none" stroke="#fff8e7" strokeWidth="5" strokeDasharray="8 7" />
                   </>
                 )}
-                <rect x={-size / 2} y={-size / 2} width={size} height={size} rx={isFinish ? 18 : 10} fill={style.fill} stroke={OUTLINE} strokeWidth={isFinish ? 5 : 3.5} />
-                {style.icon ? (
-                  <text x="0" y={isFinish ? 7 : 5} textAnchor="middle" fontSize={isFinish ? 24 : 16} fontWeight={900} fill={style.light ? '#fff' : OUTLINE} fontFamily="Fredoka One, cursive">{isFinish ? '★' : style.icon}</text>
+                {isFinish && (
+                  <>
+                    <circle cx="0" cy="0" r="70" fill="#ffe36b" opacity=".34" />
+                    <circle cx="0" cy="0" r="57" fill="none" stroke="#fff3a6" strokeWidth="6" strokeDasharray="10 8" />
+                    <path d="M-44-58L-66-80M44-58L66-80" stroke="#fff3a6" strokeWidth="6" strokeLinecap="round" />
+                    <text x="-72" y="-82" textAnchor="middle" fontSize="22" fontWeight="900" fill="#ffea4d" stroke={OUTLINE} strokeWidth="2" paintOrder="stroke" fontFamily="Fredoka One, cursive">★</text>
+                    <text x="72" y="-82" textAnchor="middle" fontSize="22" fontWeight="900" fill="#ffea4d" stroke={OUTLINE} strokeWidth="2" paintOrder="stroke" fontFamily="Fredoka One, cursive">★</text>
+                  </>
+                )}
+                <rect x={-size / 2} y={-size / 2} width={size} height={size} rx={isStart || isFinish ? 20 : 10} fill={style.fill} stroke={OUTLINE} strokeWidth={isStart || isFinish ? 5 : 3.5} />
+                {isStart ? (
+                  <>
+                    <text x="0" y="8" textAnchor="middle" fontSize="31" fontWeight="900" fill={OUTLINE} fontFamily="Fredoka One, cursive">1</text>
+                    <text x="0" y="51" textAnchor="middle" fontSize="12" fontWeight="900" fill={OUTLINE} fontFamily="Nunito, sans-serif">START</text>
+                  </>
+                ) : isFinish ? (
+                  <>
+                    <text x="0" y="11" textAnchor="middle" fontSize="31" fontWeight="900" fill="#fff8e7" stroke={OUTLINE} strokeWidth="1.5" paintOrder="stroke" fontFamily="Fredoka One, cursive">67</text>
+                    <text x="0" y="53" textAnchor="middle" fontSize="13" fontWeight="900" fill={OUTLINE} fontFamily="Nunito, sans-serif">FINISH</text>
+                  </>
+                ) : style.icon ? (
+                  <text x="0" y="5" textAnchor="middle" fontSize="16" fontWeight={900} fill={style.light ? '#fff' : OUTLINE} fontFamily="Fredoka One, cursive">{style.icon}</text>
                 ) : (
                   <text x="0" y="4" textAnchor="middle" fontSize={11} fontWeight={900} fill={OUTLINE} fontFamily="Nunito, sans-serif">{tile.index + 1}</text>
-                )}
-                {isFinish && (
-                  <text x="0" y="39" textAnchor="middle" fontSize="13" fontWeight="900" fill={OUTLINE} fontFamily="Nunito, sans-serif">FINISH</text>
                 )}
               </g>
             );
           })}
 
           <Dock x={startTile.x + 70} y={startTile.y + 30} />
-          <Castle x={finishTile.x - 70} y={finishTile.y - 30} />
 
           {Object.entries(positions).map(([teamId, tileIndex], idx) => {
             const tile = tiles[tileIndex] || tiles[0];
