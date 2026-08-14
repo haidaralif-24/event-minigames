@@ -2,17 +2,20 @@ import { useState, useEffect, useCallback } from 'react';
 import { doc, onSnapshot, setDoc, updateDoc, runTransaction, Timestamp } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, authPersistenceReady, db } from '../firebase';
-import { RAPID_SHOOTING_QUESTIONS, RAPID_SHOOTING_TIME_LIMIT, RAPID_SHOOTING_QUESTION_COUNT } from '../data/rapidShootingQuestions.js';
 import boardTiles from '../data/boardTiles.json';
+import { EVENT_QUESTIONS, MINI_GAMES, TEAM_COLORS } from '../data/constants.js';
 
 const TEAM_IDS = ['team-1', 'team-2', 'team-3', 'team-4', 'team-5', 'team-6'];
 const FINISH_TILE = 66;
+const OPENING_QUESTION_COUNT = 3;
+const OPENING_TIME_LIMIT = 8;
+const ROUND_MINIGAME_TIME_LIMIT = 12;
 const SESSION_TIMEOUT_MS = 30000;
+
 const EMPTY_GAME = {
   phase: 'lobby', round: 1, turnOrder: [], activeTeamIndex: 0, activeTeamId: null,
-  boardPositions: {}, teams: {}, winner: null, rankings: [], minigame: null,
-  skipNextTurn: {},
-  dice: { status: 'waiting', value: null, teamId: null, rolledAt: null },
+  boardPositions: {}, teams: {}, winner: null, rankings: [],
+  opening: null, minigame: null, dice: { status: 'waiting', die1: null, die2: null, total: null, teamId: null, rolledAt: null },
 };
 
 function shuffle(items) {
@@ -24,25 +27,32 @@ function shuffle(items) {
   return result;
 }
 
-function getRapidQuestion(game, questionIndex) {
-  const questionId = game.minigame?.questionIds?.[questionIndex];
-  return RAPID_SHOOTING_QUESTIONS.find((question) => question.id === questionId) || null;
+function questionById(id) {
+  return EVENT_QUESTIONS.find((question) => question.id === id) || null;
 }
 
-function getNextPlayableTurn(turnOrder, activeIndex, skipNextTurn) {
-  if (!turnOrder.length) return { index: 0, skipped: [] };
-  let index = activeIndex;
-  const skipped = [];
-  for (let attempts = 0; attempts < turnOrder.length; attempts += 1) {
-    index = (index + 1) % turnOrder.length;
-    const teamId = turnOrder[index];
-    if (skipNextTurn?.[teamId]) {
-      skipped.push(teamId);
-      continue;
-    }
-    return { index, skipped };
-  }
-  return { index: (activeIndex + 1) % turnOrder.length, skipped };
+function getNextIndex(order, currentIndex) {
+  return order.length ? (currentIndex + 1) % order.length : 0;
+}
+
+function rankScores(scores, previousOrder = []) {
+  const previousRank = Object.fromEntries(previousOrder.map((id, index) => [id, index]));
+  return Object.entries(scores || {})
+    .sort(([a, scoreA], [b, scoreB]) => scoreB - scoreA || (previousRank[a] ?? 99) - (previousRank[b] ?? 99) || a.localeCompare(b))
+    .map(([teamId], index) => ({ teamId, position: index + 1 }));
+}
+
+function buildRankingsByPosition(positions) {
+  return Object.entries(positions || {})
+    .sort(([, a], [, b]) => b - a)
+    .map(([teamId], index) => ({ teamId, position: index + 1 }));
+}
+
+function chooseRoundGame() {
+  const template = MINI_GAMES[Math.floor(Math.random() * MINI_GAMES.length)] || { id: 'rapid', label: 'Rapid Shot', description: 'Answer fast.', timeLimit: ROUND_MINIGAME_TIME_LIMIT };
+  const shuffled = shuffle(EVENT_QUESTIONS);
+  const question = shuffled.find((item) => template.questionIds?.includes(item.id)) || shuffled[0];
+  return { template, question };
 }
 
 export function useGameEngine() {
@@ -54,55 +64,29 @@ export function useGameEngine() {
     let unsubscribeSnapshot = () => {};
     let unsubscribeAuth = () => {};
     let cancelled = false;
-
     const startSubscription = (user) => {
       if (cancelled) return;
-      if (!user) {
+      if (!user) { setGameLoaded(true); setGameExists(false); return; }
+      unsubscribeSnapshot();
+      unsubscribeSnapshot = onSnapshot(doc(db, 'gameState', 'current'), (snap) => {
+        if (cancelled) return;
+        setGameExists(snap.exists());
         setGameLoaded(true);
-        setGameExists(false);
-        return;
-      }
-      unsubscribeSnapshot();
-      unsubscribeSnapshot = onSnapshot(
-        doc(db, 'gameState', 'current'),
-        (snap) => {
-          if (cancelled) return;
-          setGameExists(snap.exists());
-          setGameLoaded(true);
-          if (snap.exists()) setGame(snap.data());
-        },
-        (error) => {
-          if (cancelled) return;
-          console.error('game state subscription failed:', error);
-          setGameLoaded(true);
-        },
-      );
+        if (snap.exists()) setGame(snap.data());
+      }, (error) => { console.error('game state subscription failed:', error); setGameLoaded(true); });
     };
-
-    authPersistenceReady
-      .then(() => {
-        if (!cancelled) unsubscribeAuth = onAuthStateChanged(auth, startSubscription);
-      })
-      .catch((error) => {
-        console.error('Firebase Auth persistence initialization failed:', error);
-        if (!cancelled) unsubscribeAuth = onAuthStateChanged(auth, startSubscription);
-      });
-
-    return () => {
-      cancelled = true;
-      unsubscribeAuth();
-      unsubscribeSnapshot();
-    };
+    authPersistenceReady.then(() => { if (!cancelled) unsubscribeAuth = onAuthStateChanged(auth, startSubscription); }).catch(() => { if (!cancelled) unsubscribeAuth = onAuthStateChanged(auth, startSubscription); });
+    return () => { cancelled = true; unsubscribeAuth(); unsubscribeSnapshot(); };
   }, []);
 
   const initLobby = useCallback(async () => {
     if (!auth.currentUser) throw new Error('You must be signed in as the host.');
-    await setDoc(doc(db, 'gameState', 'current'), EMPTY_GAME);
+    await setDoc(doc(db, 'gameState', 'current'), { ...EMPTY_GAME, teams: {} });
   }, []);
 
   const joinTeam = useCallback(async (teamId, sessionId) => {
     const user = auth.currentUser;
-    if (!user || !sessionId || !TEAM_IDS.includes(teamId)) return { ok: false, error: 'Invalid authenticated team session.' };
+    if (!user || !sessionId || !TEAM_IDS.includes(teamId)) return { ok: false, error: 'Invalid team session.' };
     const gameRef = doc(db, 'gameState', 'current');
     const now = Date.now();
     try {
@@ -110,19 +94,17 @@ export function useGameEngine() {
         const snap = await transaction.get(gameRef);
         if (!snap.exists()) return { ok: false, error: 'Waiting for the host to open the lobby.' };
         const data = snap.data();
-        if (data.phase !== 'lobby') return { ok: false, error: 'The host has already started the game.' };
+        if (data.phase !== 'lobby') return { ok: false, error: 'The game has already started.' };
         const existing = data.teams?.[teamId];
-        const active = existing && existing.sessionId && (now - (existing.lastSeenAt || existing.joinedAt || 0) < SESSION_TIMEOUT_MS);
-        if (active && existing.sessionId !== sessionId) return { ok: false, error: 'This team is already connected on another device or tab.' };
-        if (existing?.uid && existing.uid !== user.uid) return { ok: false, error: 'This team belongs to another authenticated account.' };
-        transaction.update(gameRef, { [`teams.${teamId}`]: {
-          joinedAt: existing?.joinedAt || now, sessionId, uid: user.uid, email: user.email, lastSeenAt: now,
-        }});
+        const active = existing?.sessionId && now - (existing.lastSeenAt || existing.joinedAt || 0) < SESSION_TIMEOUT_MS;
+        if (active && existing.sessionId !== sessionId) return { ok: false, error: 'This team is already connected.' };
+        if (existing?.uid && existing.uid !== user.uid) return { ok: false, error: 'This team is already claimed.' };
+        transaction.update(gameRef, { [`teams.${teamId}`]: { name: existing?.name || `Team ${teamId.split('-')[1]}`, color: TEAM_COLORS[Number(teamId.split('-')[1]) - 1], joinedAt: existing?.joinedAt || now, sessionId, uid: user.uid, email: user.email, lastSeenAt: now } });
         return { ok: true };
       });
     } catch (error) {
-      console.error('joinTeam failed:', error);
-      return { ok: false, error: error?.code === 'permission-denied' ? 'Firebase denied this team action. Check the Firestore rules.' : 'Could not join the team right now. Please try again.' };
+      console.error(error);
+      return { ok: false, error: error?.code === 'permission-denied' ? 'Firebase denied the join. Check Firestore rules.' : 'Could not join the lobby.' };
     }
   }, []);
 
@@ -130,166 +112,136 @@ export function useGameEngine() {
     const user = auth.currentUser;
     if (!user || !sessionId || !TEAM_IDS.includes(teamId)) return;
     try {
-      const gameRef = doc(db, 'gameState', 'current');
       await runTransaction(db, async (transaction) => {
-        const snap = await transaction.get(gameRef);
+        const ref = doc(db, 'gameState', 'current');
+        const snap = await transaction.get(ref);
         if (!snap.exists()) return;
         const existing = snap.data().teams?.[teamId];
-        if (existing?.sessionId === sessionId && existing?.uid === user.uid) transaction.update(gameRef, { [`teams.${teamId}.lastSeenAt`]: Date.now() });
+        if (existing?.sessionId === sessionId && existing?.uid === user.uid) transaction.update(ref, { [`teams.${teamId}.lastSeenAt`]: Date.now() });
       });
-    } catch (error) {
-      console.error('team heartbeat failed:', error);
-    }
+    } catch (error) { console.error('heartbeat failed:', error); }
   }, []);
 
   const startGame = useCallback(async () => {
-    if (!auth.currentUser) throw new Error('You must be signed in as the host.');
-    if (game.phase !== 'lobby') return;
+    if (!auth.currentUser || game.phase !== 'lobby') return;
     const joined = TEAM_IDS.filter((teamId) => game.teams?.[teamId]);
     if (!joined.length) return;
     const positions = Object.fromEntries(joined.map((teamId) => [teamId, 0]));
-    const questionIds = shuffle(RAPID_SHOOTING_QUESTIONS).slice(0, RAPID_SHOOTING_QUESTION_COUNT).map((question) => question.id);
-
+    const questionIds = shuffle(EVENT_QUESTIONS).slice(0, OPENING_QUESTION_COUNT).map((q) => q.id);
     await updateDoc(doc(db, 'gameState', 'current'), {
-      phase: 'minigame', boardPositions: positions, turnOrder: [], activeTeamIndex: 0, activeTeamId: null,
-      skipNextTurn: {},
-      dice: { status: 'waiting', value: null, teamId: null, rolledAt: null },
-      minigame: {
-        type: 'rapid-shooting', status: 'playing', questionIndex: 0, questionIds,
-        startedAt: Timestamp.now(), questionCount: RAPID_SHOOTING_QUESTION_COUNT,
-        timeLimit: RAPID_SHOOTING_TIME_LIMIT, answers: {},
-        scores: Object.fromEntries(joined.map((teamId) => [teamId, 0])),
-      },
+      phase: 'opening', boardPositions: positions, turnOrder: [], activeTeamIndex: 0, activeTeamId: null, winner: null, rankings: [],
+      dice: { status: 'waiting', die1: null, die2: null, total: null, teamId: null, rolledAt: null },
+      opening: { questionIndex: 0, questionIds, questionCount: OPENING_QUESTION_COUNT, timeLimit: OPENING_TIME_LIMIT, startedAt: Timestamp.now(), answers: {}, scores: Object.fromEntries(joined.map((id) => [id, 0])) },
+      minigame: null,
     });
   }, [game.phase, game.teams]);
 
-  const submitRapidAnswer = useCallback(async (teamId, optionIndex) => {
+  const submitAnswer = useCallback(async (teamId, optionIndex) => {
     const user = auth.currentUser;
-    if (!user || game.phase !== 'minigame' || game.minigame?.type !== 'rapid-shooting' || game.minigame?.status !== 'playing') return;
-    const questionIndex = game.minigame.questionIndex ?? 0;
-    const question = getRapidQuestion(game, questionIndex);
-    if (!question || game.minigame.answers?.[questionIndex]?.[teamId]) return;
-
-    const gameRef = doc(db, 'gameState', 'current');
+    const phaseConfig = game.phase === 'opening' ? game.opening : game.minigame;
+    if (!user || !phaseConfig || !['opening', 'minigame'].includes(game.phase)) return;
+    const questionId = phaseConfig.questionIds?.[phaseConfig.questionIndex];
+    const question = questionById(questionId);
+    if (!question || phaseConfig.answers?.[phaseConfig.questionIndex]?.[teamId]) return;
+    const ref = doc(db, 'gameState', 'current');
     try {
       await runTransaction(db, async (transaction) => {
-        const snap = await transaction.get(gameRef);
-        if (!snap.exists()) throw new Error('Game state no longer exists.');
+        const snap = await transaction.get(ref);
+        if (!snap.exists()) return;
         const current = snap.data();
-        const minigame = current.minigame;
-        if (current.phase !== 'minigame' || minigame?.type !== 'rapid-shooting' || minigame?.status !== 'playing') return;
-        const currentIndex = minigame.questionIndex ?? 0;
-        const currentQuestion = getRapidQuestion(current, currentIndex);
-        if (!currentQuestion || currentIndex !== questionIndex) return;
-        if (minigame.answers?.[currentIndex]?.[teamId]) return;
-
-        const startedAt = minigame.startedAt;
-        if (!startedAt || typeof startedAt.toMillis !== 'function') throw new Error('Question timer is still synchronizing. Please try again.');
-        const answeredAt = Date.now();
-        const elapsed = Math.max(0, (answeredAt - startedAt.toMillis()) / 1000);
-        const correct = optionIndex === currentQuestion.answer;
-        const withinTime = elapsed <= RAPID_SHOOTING_TIME_LIMIT + 0.25;
-        const speedBonus = correct && withinTime ? Math.max(0, Math.round(50 - elapsed * 4)) : 0;
-        const points = correct && withinTime ? 100 + speedBonus : 0;
-        const currentScore = minigame.scores?.[teamId] || 0;
-
-        transaction.update(gameRef, {
-          [`minigame.answers.${currentIndex}.${teamId}`]: {
-            uid: user.uid, optionIndex, correct: correct && withinTime,
-            answeredAt, elapsed: Number(elapsed.toFixed(2)), points,
-          },
-          [`minigame.scores.${teamId}`]: currentScore + points,
+        const config = current.phase === 'opening' ? current.opening : current.minigame;
+        if (!config || current.phase !== game.phase || config.questionIndex !== phaseConfig.questionIndex) return;
+        const q = questionById(config.questionIds?.[config.questionIndex]);
+        if (!q || config.answers?.[config.questionIndex]?.[teamId]) return;
+        const started = config.startedAt?.toMillis?.() ?? config.startedAt ?? Date.now();
+        const elapsed = Math.max(0, (Date.now() - started) / 1000);
+        if (elapsed > (config.timeLimit || OPENING_TIME_LIMIT) + 0.5) return;
+        const correct = optionIndex === q.answerIndex;
+        const points = correct ? Math.max(1, 100 + Math.round((config.timeLimit - elapsed) * 10)) : 0;
+        const score = config.scores?.[teamId] || 0;
+        transaction.update(ref, {
+          [`${current.phase}.answers.${config.questionIndex}.${teamId}`]: { uid: user.uid, optionIndex, correct, points, elapsed: Number(elapsed.toFixed(2)), answeredAt: Date.now() },
+          [`${current.phase}.scores.${teamId}`]: score + points,
         });
       });
-    } catch (error) {
-      console.error('submitRapidAnswer failed:', error);
-      throw error;
-    }
+    } catch (error) { console.error('submitAnswer failed:', error); }
   }, [game]);
 
-  const nextRapidQuestion = useCallback(async () => {
-    if (game.phase !== 'minigame' || game.minigame?.status !== 'playing') return;
-    const nextIndex = (game.minigame.questionIndex ?? 0) + 1;
-    if (nextIndex >= RAPID_SHOOTING_QUESTION_COUNT) return;
-    await updateDoc(doc(db, 'gameState', 'current'), {
-      'minigame.questionIndex': nextIndex,
-      'minigame.startedAt': Timestamp.now(),
-    });
-  }, [game.phase, game.minigame]);
+  const advanceQuestion = useCallback(async () => {
+    const config = game.phase === 'opening' ? game.opening : game.minigame;
+    if (!config) return;
+    const nextIndex = (config.questionIndex || 0) + 1;
+    if (nextIndex >= config.questionCount) {
+      if (game.phase === 'opening') {
+        const rankings = rankScores(config.scores, []);
+        await updateDoc(doc(db, 'gameState', 'current'), { phase: 'opening-results', rankings, 'opening.finishedAt': Date.now() });
+      } else {
+        const rankings = rankScores(config.scores, game.turnOrder);
+        await updateDoc(doc(db, 'gameState', 'current'), { phase: 'minigame-results', rankings, 'minigame.finishedAt': Date.now(), 'minigame.status': 'finished' });
+      }
+      return;
+    }
+    await updateDoc(doc(db, 'gameState', 'current'), { [`${game.phase}.questionIndex`]: nextIndex, [`${game.phase}.startedAt`]: Timestamp.now() });
+  }, [game]);
 
-  const finishRapidShooting = useCallback(async () => {
-    if (game.phase !== 'minigame' || game.minigame?.type !== 'rapid-shooting') return;
-    const ranked = Object.entries(game.minigame.scores || [])
-      .sort(([teamA, scoreA], [teamB, scoreB]) => scoreB - scoreA || teamA.localeCompare(teamB))
-      .map(([teamId], index) => ({ teamId, position: index + 1 }));
-    const turnOrder = ranked.map((ranking) => ranking.teamId);
-    await updateDoc(doc(db, 'gameState', 'current'), {
-      phase: 'rapid-results', turnOrder, activeTeamIndex: 0, activeTeamId: turnOrder[0] || null,
-      rankings: ranked, winner: null, 'minigame.status': 'finished', 'minigame.finishedAt': Date.now(),
-    });
-  }, [game.phase, game.minigame]);
+  const beginBoard = useCallback(async () => {
+    if (!['opening-results', 'turn-order'].includes(game.phase) || !game.turnOrder?.length) return;
+    await updateDoc(doc(db, 'gameState', 'current'), { phase: 'playing', round: 1, activeTeamIndex: 0, activeTeamId: game.turnOrder[0], dice: { status: 'waiting', die1: null, die2: null, total: null, teamId: game.turnOrder[0], rolledAt: null } });
+  }, [game.phase, game.turnOrder]);
 
-  const advanceToTurnOrder = useCallback(async () => {
-    if (game.phase !== 'rapid-results') return;
-    await updateDoc(doc(db, 'gameState', 'current'), { phase: 'turn-order', 'minigame.resultsShownAt': Date.now() });
-  }, [game.phase]);
+  const prepareNextRound = useCallback(async () => {
+    if (game.phase !== 'minigame-results' || !game.turnOrder?.length) return;
+    const nextOrder = (game.rankings || []).map((r) => r.teamId);
+    await updateDoc(doc(db, 'gameState', 'current'), { phase: 'round-transition', turnOrder: nextOrder, activeTeamIndex: 0, activeTeamId: nextOrder[0], round: (game.round || 1) + 1 });
+  }, [game.phase, game.turnOrder, game.rankings, game.round]);
 
-  const startBoard = useCallback(async () => {
-    if (game.phase !== 'turn-order' || !game.turnOrder?.length) return;
-    await updateDoc(doc(db, 'gameState', 'current'), {
-      phase: 'playing', round: 1, activeTeamIndex: 0, activeTeamId: game.turnOrder[0],
-      skipNextTurn: {},
-      dice: { status: 'waiting', value: null, teamId: game.turnOrder[0], rolledAt: null },
-    });
+  const startNextRound = useCallback(async () => {
+    if (game.phase !== 'round-transition' || !game.turnOrder?.length) return;
+    await updateDoc(doc(db, 'gameState', 'current'), { phase: 'playing', activeTeamIndex: 0, activeTeamId: game.turnOrder[0], dice: { status: 'waiting', die1: null, die2: null, total: null, teamId: game.turnOrder[0], rolledAt: null }, minigame: null });
   }, [game.phase, game.turnOrder]);
 
   const rollDice = useCallback(async (teamId) => {
     const user = auth.currentUser;
     if (!user || game.phase !== 'playing' || game.activeTeamId !== teamId) return;
-    const gameRef = doc(db, 'gameState', 'current');
+    const ref = doc(db, 'gameState', 'current');
     try {
       await runTransaction(db, async (transaction) => {
-        const snap = await transaction.get(gameRef);
+        const snap = await transaction.get(ref);
         if (!snap.exists()) return;
         const current = snap.data();
-        if (current.phase !== 'playing' || current.activeTeamId !== teamId || current.dice?.status === 'rolling') return;
-        const rollValue = Math.floor(Math.random() * 6) + 1;
-        const currentPos = current.boardPositions?.[teamId] ?? 0;
-        const rolledPos = Math.min(currentPos + rollValue, FINISH_TILE);
-        const landedTile = boardTiles[rolledPos];
-        const landedOnTrap = landedTile?.type === 'penalty';
-        const newPos = landedOnTrap ? Math.max(0, rolledPos - 5) : rolledPos;
-        const turnOrder = current.turnOrder || [];
-        const activeIndex = current.activeTeamIndex ?? 0;
-        const currentSkips = { ...(current.skipNextTurn || {}) };
-        const { index: nextIndex, skipped } = getNextPlayableTurn(turnOrder, activeIndex, currentSkips);
-        skipped.forEach((skippedTeamId) => { delete currentSkips[skippedTeamId]; });
-        const reachedFinish = newPos >= FINISH_TILE;
-        transaction.update(gameRef, {
-          [`boardPositions.${teamId}`]: newPos,
-          skipNextTurn: currentSkips,
-          dice: { status: 'rolled', value: rollValue, teamId, rolledAt: Date.now() },
-          ...(reachedFinish
-            ? { phase: 'finished', winner: teamId, rankings: Object.entries({ ...(current.boardPositions || {}), [teamId]: newPos }).sort(([, a], [, b]) => b - a).map(([id], index) => ({ teamId: id, position: index + 1 })) }
-            : { activeTeamIndex: nextIndex, activeTeamId: turnOrder[nextIndex] || null, round: nextIndex === 0 ? (current.round || 1) + 1 : (current.round || 1) }),
+        if (current.phase !== 'playing' || current.activeTeamId !== teamId) return;
+        const die1 = Math.floor(Math.random() * 6) + 1;
+        const die2 = Math.floor(Math.random() * 6) + 1;
+        const total = die1 + die2;
+        const oldPosition = current.boardPositions?.[teamId] ?? 0;
+        const target = Math.min(oldPosition + total, FINISH_TILE);
+        const tile = boardTiles[target];
+        const newPosition = tile?.type === 'penalty' ? Math.max(0, target - 4) : target;
+        const positions = { ...(current.boardPositions || {}), [teamId]: newPosition };
+        const reachedFinish = newPosition >= FINISH_TILE;
+        const order = current.turnOrder || [];
+        const currentIndex = current.activeTeamIndex || 0;
+        const nextIndex = getNextIndex(order, currentIndex);
+        const completedRound = nextIndex === 0;
+        transaction.update(ref, {
+          boardPositions: positions,
+          dice: { status: 'rolled', die1, die2, total, teamId, rolledAt: Date.now() },
+          ...(reachedFinish ? { phase: 'finished', winner: teamId, rankings: buildRankingsByPosition(positions), finishedAt: Date.now() } : completedRound ? {
+            phase: 'minigame', activeTeamIndex: 0, activeTeamId: null,
+            minigame: (() => { const { template, question } = chooseRoundGame(); return { type: template.id, label: template.label, description: template.description, questionIds: [question.id], questionIndex: 0, questionCount: 1, timeLimit: template.timeLimit || ROUND_MINIGAME_TIME_LIMIT, startedAt: Timestamp.now(), status: 'playing', answers: {}, scores: Object.fromEntries(order.map((id) => [id, 0])) }; })(),
+          } : { activeTeamIndex: nextIndex, activeTeamId: order[nextIndex], round: current.round || 1 }),
         });
       });
-    } catch (error) {
-      console.error('rollDice failed:', error);
-    }
+    } catch (error) { console.error('rollDice failed:', error); }
   }, [game.phase, game.activeTeamId]);
 
-  const nextTurn = useCallback(async () => {
-    if (!game.turnOrder?.length) return;
-    const currentSkips = { ...(game.skipNextTurn || {}) };
-    const { index: nextIndex, skipped } = getNextPlayableTurn(game.turnOrder, game.activeTeamIndex, currentSkips);
-    skipped.forEach((teamId) => { delete currentSkips[teamId]; });
-    await updateDoc(doc(db, 'gameState', 'current'), {
-      activeTeamIndex: nextIndex, activeTeamId: game.turnOrder[nextIndex],
-      skipNextTurn: currentSkips,
-      round: nextIndex === 0 ? game.round + 1 : game.round,
-    });
-  }, [game.turnOrder, game.activeTeamIndex, game.round, game.skipNextTurn]);
+  const resetForNewGame = useCallback(async () => {
+    if (!auth.currentUser) return;
+    await setDoc(doc(db, 'gameState', 'current'), { ...EMPTY_GAME, teams: {} });
+  }, []);
 
-  return { game, gameLoaded, gameExists, initLobby, joinTeam, touchTeamSession, startGame, submitRapidAnswer, nextRapidQuestion, finishRapidShooting, advanceToTurnOrder, startBoard, rollDice, nextTurn };
+  return {
+    game, gameLoaded, gameExists, initLobby, joinTeam, touchTeamSession, startGame,
+    submitAnswer, advanceQuestion, beginBoard, prepareNextRound, startNextRound, rollDice, resetForNewGame,
+  };
 }
