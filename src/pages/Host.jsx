@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import Board from '../components/Board.jsx';
 import HostControls from '../components/HostControls.jsx';
 import { useGameEngine } from '../components/TurnEngine.jsx';
-import { EVENT_META, EVENT_QUESTIONS, TEAM_COLORS } from '../data/constants.js';
+import { EVENT_META, EVENT_QUESTIONS, EVENT_CHALLENGES, TEAM_COLORS } from '../data/constants.js';
 
 const TEAM_LABELS = { 'team-1': 'One', 'team-2': 'Two', 'team-3': 'Three', 'team-4': 'Four', 'team-5': 'Five', 'team-6': 'Six' };
 function Die({ value }) { return <div className="flex h-16 w-16 items-center justify-center rounded-2xl border-4 border-[#18233f] bg-white text-4xl font-black text-[#18233f] shadow-lg">{value || '🎲'}</div>; }
@@ -14,7 +14,8 @@ function ProjectorHud() {
   const teamCount = Object.keys(game.teams || {}).length;
   const positions = game.boardPositions || {};
   const config = game.phase === 'opening' ? game.opening : game.phase === 'minigame' ? game.minigame : game.phase === 'challenge' ? { questionIds: [game.challenge?.questionId], questionIndex: 0, timeLimit: game.challenge?.timeLimit, startedAt: game.challenge?.startedAt } : null;
-  const question = config ? EVENT_QUESTIONS.find((q) => q.id === config.questionIds?.[config.questionIndex]) : null;
+  const bank = game.phase === 'challenge' ? ((EVENT_CHALLENGES?.questions?.length) ? EVENT_CHALLENGES.questions : EVENT_QUESTIONS) : EVENT_QUESTIONS;
+  const question = config ? bank.find((q) => q.id === config.questionIds?.[config.questionIndex]) : null;
   const started = config?.startedAt?.toMillis?.() ?? config?.startedAt;
   const timeLeft = config && started ? Math.max(0, (config.timeLimit || 10) - (now - started) / 1000) : 0;
   return <>

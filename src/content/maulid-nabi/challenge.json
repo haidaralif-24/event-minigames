@@ -1,0 +1,19 @@
+{
+  "timeLimit": 15,
+  "winTiles": 3,
+  "loseTiles": 5,
+  "questions": [
+    { "id": "c1", "prompt": "Which prophet is celebrated during Maulid Nabi?", "choices": ["Prophet Muhammad", "Prophet Isa", "Prophet Musa", "Prophet Nuh"], "answerIndex": 0, "sourceRef": "maulid-nabi" },
+    { "id": "c2", "prompt": "In which month is Maulid Nabi traditionally observed?", "choices": ["Ramadan", "Rabi' al-Awwal", "Dhul-Hijjah", "Muharram"], "answerIndex": 1, "sourceRef": "maulid-nabi" },
+    { "id": "c3", "prompt": "What city was Prophet Muhammad born in?", "choices": ["Madinah", "Makkah", "Jerusalem", "Baghdad"], "answerIndex": 1, "sourceRef": "maulid-nabi" },
+    { "id": "c4", "prompt": "What is the Arabic word for 'praise' often sung at Maulid gatherings?", "choices": ["Sholawat", "Takbir", "Tahlil", "Tasbih"], "answerIndex": 0, "sourceRef": "maulid-nabi" },
+    { "id": "c5", "prompt": "How many pillars of Islam are there?", "choices": ["3", "4", "5", "6"], "answerIndex": 2, "sourceRef": "islam" },
+    { "id": "c6", "prompt": "Which angel brought revelations to Prophet Muhammad?", "choices": ["Angel Mikail", "Angel Jibril", "Angel Israfil", "Angel Izrail"], "answerIndex": 1, "sourceRef": "islam" },
+    { "id": "c7", "prompt": "What is the holy book revealed to Prophet Muhammad?", "choices": ["Torah", "Psalms", "Gospel", "Al-Qur'an"], "answerIndex": 3, "sourceRef": "islam" },
+    { "id": "c8", "prompt": "How many times a day do Muslims pray?", "choices": ["3", "4", "5", "6"], "answerIndex": 2, "sourceRef": "islam" },
+    { "id": "c9", "prompt": "What is the first month of the Islamic calendar?", "choices": ["Safar", "Rabi' al-Awwal", "Muharram", "Ramadan"], "answerIndex": 2, "sourceRef": "islam" },
+    { "id": "c10", "prompt": "Which direction do Muslims face in prayer?", "choices": ["East", "The Ka'bah in Makkah", "Medina", "Jerusalem"], "answerIndex": 1, "sourceRef": "islam" },
+    { "id": "c11", "prompt": "What is the name of Prophet Muhammad's migration to Madinah?", "choices": ["Hijrah", "Isra", "Mi'raj", "Jihad"], "answerIndex": 0, "sourceRef": "islam" },
+    { "id": "c12", "prompt": "Which animal is traditionally mentioned as the Prophet's mount in Isra' Mi'raj?", "choices": ["Horse", "Buraq", "Camel", "Donkey"], "answerIndex": 1, "sourceRef": "islam" }
+  ]
+}

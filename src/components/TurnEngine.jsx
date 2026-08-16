@@ -3,7 +3,7 @@ import { doc, onSnapshot, setDoc, updateDoc, runTransaction, Timestamp } from 'f
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, authPersistenceReady, db } from '../firebase';
 import boardTiles from '../data/boardTiles.json';
-import { EVENT_QUESTIONS, MINI_GAMES, TEAM_COLORS } from '../data/constants.js';
+import { EVENT_QUESTIONS, EVENT_CHALLENGES, MINI_GAMES, TEAM_COLORS } from '../data/constants.js';
 
 const TEAM_IDS = ['team-1', 'team-2', 'team-3', 'team-4', 'team-5', 'team-6'];
 const FINISH_TILE = 66;
@@ -11,10 +11,14 @@ const OPENING_QUESTION_COUNT = 3;
 const OPENING_TIME_LIMIT = 8;
 const ROUND_MINIGAME_TIME_LIMIT = 12;
 const CHALLENGE_TIME_LIMIT = 15;
+const CHALLENGE_WIN_TILES = 3;
+const CHALLENGE_LOSE_TILES = 5;
 const SESSION_TIMEOUT_MS = 30000;
 const EMPTY_GAME = { phase: 'lobby', round: 1, turnOrder: [], activeTeamIndex: 0, activeTeamId: null, boardPositions: {}, teams: {}, winner: null, rankings: [], opening: null, minigame: null, challenge: null, dice: { status: 'waiting', die1: null, die2: null, total: null, teamId: null, rolledAt: null } };
 function shuffle(items) { const result = [...items]; for (let i = result.length - 1; i > 0; i -= 1) { const j = Math.floor(Math.random() * (i + 1)); [result[i], result[j]] = [result[j], result[i]]; } return result; }
 function questionById(id) { return EVENT_QUESTIONS.find((question) => question.id === id) || null; }
+const challengeBank = (EVENT_CHALLENGES?.questions?.length) ? EVENT_CHALLENGES.questions : EVENT_QUESTIONS;
+function challengeQuestionById(id) { return challengeBank.find((question) => question.id === id) || questionById(id); }
 function getNextIndex(order, currentIndex) { return order.length ? (currentIndex + 1) % order.length : 0; }
 function rankScores(scores, previousOrder = []) { const previousRank = Object.fromEntries(previousOrder.map((id, index) => [id, index])); return Object.entries(scores || {}).sort(([a, scoreA], [b, scoreB]) => scoreB - scoreA || (previousRank[a] ?? 99) - (previousRank[b] ?? 99) || a.localeCompare(b)).map(([teamId], index) => ({ teamId, position: index + 1 })); }
 function buildRankingsByPosition(positions) { return Object.entries(positions || {}).sort(([, a], [, b]) => b - a).map(([teamId], index) => ({ teamId, position: index + 1 })); }
@@ -88,14 +92,14 @@ export function useGameEngine() {
         const diceUpdate = { status: 'rolled', die1, die2, total, teamId, rolledAt: Date.now() };
 
         if (tile?.type === 'challenge') {
-          const question = shuffle(EVENT_QUESTIONS)[0];
+          const question = shuffle(challengeBank)[0];
           transaction.update(ref, {
             boardPositions: { ...(current.boardPositions || {}), [teamId]: target },
             dice: diceUpdate,
             phase: 'challenge',
             activeTeamIndex: current.activeTeamIndex,
             activeTeamId: teamId,
-            challenge: { teamId, questionId: question.id, startedAt: Timestamp.now(), timeLimit: CHALLENGE_TIME_LIMIT, resolved: false, correct: null, answer: null, answeredAt: null },
+            challenge: { teamId, questionId: question.id, startedAt: Timestamp.now(), timeLimit: EVENT_CHALLENGES?.timeLimit || CHALLENGE_TIME_LIMIT, resolved: false, correct: null, answer: null, answeredAt: null },
           });
           return;
         }
@@ -123,14 +127,16 @@ export function useGameEngine() {
         const current = snap.data();
         const ch = current.challenge;
         if (!ch || ch.teamId !== teamId || ch.resolved || current.phase !== 'challenge') return;
-        const question = questionById(ch.questionId);
+        const question = challengeQuestionById(ch.questionId);
         if (!question) return;
         const started = ch.startedAt?.toMillis?.() ?? ch.startedAt ?? Date.now();
         const elapsed = Math.max(0, (Date.now() - started) / 1000);
         if (!isTimeout && elapsed > (ch.timeLimit || CHALLENGE_TIME_LIMIT) + 0.5) return;
         const correct = isTimeout ? false : optionIndex === question.answerIndex;
         const target = current.boardPositions?.[teamId] ?? 0;
-        const finalPosition = correct ? Math.min(target + 3, FINISH_TILE) : Math.max(0, target - 5);
+        const winTiles = EVENT_CHALLENGES?.winTiles ?? CHALLENGE_WIN_TILES;
+        const loseTiles = EVENT_CHALLENGES?.loseTiles ?? CHALLENGE_LOSE_TILES;
+        const finalPosition = correct ? Math.min(target + winTiles, FINISH_TILE) : Math.max(0, target - loseTiles);
         transaction.update(ref, {
           challenge: { ...ch, resolved: true, correct, answer: isTimeout ? null : optionIndex, answeredAt: Date.now() },
           ...resolveMoveOutcome(current, teamId, finalPosition),

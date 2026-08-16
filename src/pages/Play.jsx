@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useGameEngine } from '../components/TurnEngine.jsx';
-import { EVENT_QUESTIONS, TEAM_COLORS } from '../data/constants.js';
+import { EVENT_QUESTIONS, EVENT_CHALLENGES, TEAM_COLORS } from '../data/constants.js';
 
 const TEAM_LABELS = { 'team-1': 'One', 'team-2': 'Two', 'team-3': 'Three', 'team-4': 'Four', 'team-5': 'Five', 'team-6': 'Six' };
 const ANSWER_STYLES = ['bg-[#ff4d4d]', 'bg-[#4d79ff]', 'bg-[#4dff79]', 'bg-[#ffea4d]'];
@@ -36,7 +36,8 @@ function QuestionCard({ game, myTeamId, now, submitAnswer }) {
 
 function ChallengeCard({ game, myTeamId, now, submitChallengeAnswer }) {
   const ch = game.challenge;
-  const question = EVENT_QUESTIONS.find((item) => item.id === ch?.questionId);
+  const bank = (EVENT_CHALLENGES?.questions?.length) ? EVENT_CHALLENGES.questions : EVENT_QUESTIONS;
+  const question = bank.find((item) => item.id === ch?.questionId);
   if (!question) return <div className="rounded-3xl bg-white p-8 text-center font-black">Loading question…</div>;
   const started = ch.startedAt?.toMillis?.() ?? ch.startedAt ?? now;
   const timeLeft = Math.max(0, (ch.timeLimit || 15) - ((now - started) / 1000));

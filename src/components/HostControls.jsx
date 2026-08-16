@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useGameEngine } from './TurnEngine.jsx';
-import { EVENT_QUESTIONS, TEAM_COLORS } from '../data/constants.js';
+import { EVENT_QUESTIONS, EVENT_CHALLENGES, TEAM_COLORS } from '../data/constants.js';
 const TEAM_LABELS = { 'team-1': 'One', 'team-2': 'Two', 'team-3': 'Three', 'team-4': 'Four', 'team-5': 'Five', 'team-6': 'Six' };
 function TeamRow({ teamId, rank, score, position, active }) { const color = TEAM_COLORS[Number(teamId.split('-')[1]) - 1]; return <div className={`flex items-center gap-3 rounded-2xl border-2 px-3 py-3 ${active ? 'border-[#ff8c4d] bg-[#fff4e8]' : 'border-[#18233f]/10 bg-white'}`}><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#18233f] text-sm font-black text-white">{rank}</div><span className="h-3 w-3 rounded-full" style={{ background: color }} /><div className="min-w-0 flex-1"><p className="truncate font-black text-[#18233f]">Team {TEAM_LABELS[teamId]}</p><p className="text-xs font-semibold text-[#7a8395]">{score ?? 0} pts{position !== undefined ? ` • Tile ${position + 1}` : ''}</p></div>{active && <span className="rounded-full bg-[#ff8c4d] px-2 py-1 text-[10px] font-black uppercase text-white">Turn</span>}</div>; }
 function QuestionPanel({ game }) {
@@ -8,7 +8,8 @@ function QuestionPanel({ game }) {
   if (game.phase === 'opening') { config = game.opening; label = 'OPENING'; }
   else if (game.phase === 'minigame') { config = game.minigame; label = (game.minigame?.label || 'Mini-game').toUpperCase(); }
   else if (game.phase === 'challenge') { config = { questionIds: [game.challenge?.questionId], questionIndex: 0, questionCount: 1, timeLimit: game.challenge?.timeLimit }; label = 'CHALLENGE'; }
-  const question = config ? EVENT_QUESTIONS.find((q) => q.id === config.questionIds?.[config.questionIndex]) : null;
+  const bank = game.phase === 'challenge' ? ((EVENT_CHALLENGES?.questions?.length) ? EVENT_CHALLENGES.questions : EVENT_QUESTIONS) : EVENT_QUESTIONS;
+  const question = config ? bank.find((q) => q.id === config.questionIds?.[config.questionIndex]) : null;
   if (!config) return null;
   return <section className="rounded-2xl border-2 border-[#18233f]/10 bg-white p-4"><div className="flex items-center justify-between"><span className="rounded-full bg-[#18233f] px-3 py-1 text-xs font-black text-white">{label}</span><span className="font-black text-[#ff8c4d]">{config.timeLimit}s</span></div><p className="mt-4 font-black text-[#18233f]">{question?.prompt}</p></section>;
 }
