@@ -18,7 +18,7 @@ function questionById(id) { return EVENT_QUESTIONS.find((question) => question.i
 function getNextIndex(order, currentIndex) { return order.length ? (currentIndex + 1) % order.length : 0; }
 function rankScores(scores, previousOrder = []) { const previousRank = Object.fromEntries(previousOrder.map((id, index) => [id, index])); return Object.entries(scores || {}).sort(([a, scoreA], [b, scoreB]) => scoreB - scoreA || (previousRank[a] ?? 99) - (previousRank[b] ?? 99) || a.localeCompare(b)).map(([teamId], index) => ({ teamId, position: index + 1 })); }
 function buildRankingsByPosition(positions) { return Object.entries(positions || {}).sort(([, a], [, b]) => b - a).map(([teamId], index) => ({ teamId, position: index + 1 })); }
-function chooseRoundGame() { const template = MINI_GAMES[Math.floor(Math.random() * MINI_GAMES.length)] || MINI_GAMES[0]; const question = shuffle(EVENT_QUESTIONS)[0]; return { template, question }; }
+function chooseRoundGame(previousType) { const pool = (MINI_GAMES.length > 1 && previousType) ? MINI_GAMES.filter((game) => game.id !== previousType) : MINI_GAMES; const template = pool[Math.floor(Math.random() * pool.length)] || MINI_GAMES[0]; const question = shuffle(EVENT_QUESTIONS)[0]; return { template, question }; }
 
 function resolveMoveOutcome(current, teamId, finalPosition) {
   const positions = { ...(current.boardPositions || {}), [teamId]: finalPosition };
@@ -31,7 +31,7 @@ function resolveMoveOutcome(current, teamId, finalPosition) {
     return { boardPositions: positions, phase: 'finished', winner: teamId, rankings: buildRankingsByPosition(positions), finishedAt: Date.now() };
   }
   if (completedRound) {
-    const { template, question } = chooseRoundGame();
+    const { template, question } = chooseRoundGame(current.minigame?.type);
     return {
       boardPositions: positions,
       phase: 'minigame',
