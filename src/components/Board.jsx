@@ -32,10 +32,10 @@ const INNER_START_ANGLE = Math.PI * 0.5; // bottom
 // Transition bridge: tiles 34-35 (2 tiles linking outer→inner)
 const BRIDGE_COUNT = 2;
 
-// Final approach: tiles 63-66 (4 tiles spiralling to centre finish)
+// Final approach: tiles 63-66 spiral inward along the right side to the centre finish (tile 67)
 const FINAL_COUNT = 4;
-const FINAL_RX = 140;
-const FINAL_RY = 110;
+const FINAL_RADII = [200, 140, 95, 0];
+const FINAL_ANGLES = [1.0, 0.5, 0.0, 0.0];
 
 function buildSpiralPositions(total) {
   const positions = [];
@@ -75,15 +75,13 @@ function buildSpiralPositions(total) {
     });
   }
 
-  // --- Final approach to centre ---
+  // --- Final approach: spiral inward to the centre finish, keeping tile 66 clear of tile 67 ---
   for (let i = 0; i < FINAL_COUNT && positions.length < total; i++) {
-    const t = (i + 1) / (FINAL_COUNT + 1);
-    const angle = INNER_START_ANGLE - Math.PI * 0.1 + (i / FINAL_COUNT) * Math.PI * 0.6;
-    const rx = FINAL_RX * (1 - t * 0.7);
-    const ry = FINAL_RY * (1 - t * 0.7);
+    const r = FINAL_RADII[i];
+    const ry = r * (INNER_RY / INNER_RX);
     positions.push({
-      x: CX + rx * Math.cos(angle),
-      y: CY + ry * Math.sin(angle),
+      x: CX + r * Math.cos(FINAL_ANGLES[i]),
+      y: CY + ry * Math.sin(FINAL_ANGLES[i]),
     });
   }
 
