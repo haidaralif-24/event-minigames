@@ -3,17 +3,17 @@
   "winTiles": 3,
   "loseTiles": 5,
   "questions": [
-    { "id": "c1", "prompt": "Which prophet is celebrated during Maulid Nabi?", "choices": ["Prophet Muhammad", "Prophet Isa", "Prophet Musa", "Prophet Nuh"], "answerIndex": 0, "sourceRef": "maulid-nabi" },
-    { "id": "c2", "prompt": "In which month is Maulid Nabi traditionally observed?", "choices": ["Ramadan", "Rabi' al-Awwal", "Dhul-Hijjah", "Muharram"], "answerIndex": 1, "sourceRef": "maulid-nabi" },
-    { "id": "c3", "prompt": "What city was Prophet Muhammad born in?", "choices": ["Madinah", "Makkah", "Jerusalem", "Baghdad"], "answerIndex": 1, "sourceRef": "maulid-nabi" },
-    { "id": "c4", "prompt": "What is the Arabic word for 'praise' often sung at Maulid gatherings?", "choices": ["Sholawat", "Takbir", "Tahlil", "Tasbih"], "answerIndex": 0, "sourceRef": "maulid-nabi" },
-    { "id": "c5", "prompt": "How many pillars of Islam are there?", "choices": ["3", "4", "5", "6"], "answerIndex": 2, "sourceRef": "islam" },
-    { "id": "c6", "prompt": "Which angel brought revelations to Prophet Muhammad?", "choices": ["Angel Mikail", "Angel Jibril", "Angel Israfil", "Angel Izrail"], "answerIndex": 1, "sourceRef": "islam" },
-    { "id": "c7", "prompt": "What is the holy book revealed to Prophet Muhammad?", "choices": ["Torah", "Psalms", "Gospel", "Al-Qur'an"], "answerIndex": 3, "sourceRef": "islam" },
-    { "id": "c8", "prompt": "How many times a day do Muslims pray?", "choices": ["3", "4", "5", "6"], "answerIndex": 2, "sourceRef": "islam" },
-    { "id": "c9", "prompt": "What is the first month of the Islamic calendar?", "choices": ["Safar", "Rabi' al-Awwal", "Muharram", "Ramadan"], "answerIndex": 2, "sourceRef": "islam" },
-    { "id": "c10", "prompt": "Which direction do Muslims face in prayer?", "choices": ["East", "The Ka'bah in Makkah", "Medina", "Jerusalem"], "answerIndex": 1, "sourceRef": "islam" },
-    { "id": "c11", "prompt": "What is the name of Prophet Muhammad's migration to Madinah?", "choices": ["Hijrah", "Isra", "Mi'raj", "Jihad"], "answerIndex": 0, "sourceRef": "islam" },
-    { "id": "c12", "prompt": "Which animal is traditionally mentioned as the Prophet's mount in Isra' Mi'raj?", "choices": ["Horse", "Buraq", "Camel", "Donkey"], "answerIndex": 1, "sourceRef": "islam" }
+    { "id": "c1", "prompt": "What is the capital of France?", "choices": ["Berlin", "Madrid", "Paris", "Rome"], "answerIndex": 2, "sourceRef": "general-knowledge" },
+    { "id": "c2", "prompt": "Which color is the sky on a clear day?", "choices": ["Green", "Blue", "Red", "Yellow"], "answerIndex": 1, "sourceRef": "observation" },
+    { "id": "c3", "prompt": "How many legs does a spider have?", "choices": ["6", "8", "10", "4"], "answerIndex": 1, "sourceRef": "biology" },
+    { "id": "c4", "prompt": "What is 5 + 7?", "choices": ["10", "11", "12", "13"], "answerIndex": 2, "sourceRef": "math" },
+    { "id": "c5", "prompt": "Which element is H?", "choices": ["Hydrogen", "Helium", "Oxygen", "Nitrogen"], "answerIndex": 0, "sourceRef": "science" },
+    { "id": "c6", "prompt": "Which is a primary color?", "choices": ["Green", "Purple", "Blue", "Orange"], "answerIndex": 2, "sourceRef": "art" },
+    { "id": "c7", "prompt": "How many continents are there?", "choices": ["5", "6", "7", "8"], "answerIndex": 2, "sourceRef": "geography" },
+    { "id": "c8", "prompt": "What is the largest ocean?", "choices": ["Atlantic", "Indian", "Arctic", "Pacific"], "answerIndex": 3, "sourceRef": "geography" },
+    { "id": "c9", "prompt": "Who wrote Romeo and Juliet?", "choices": ["Dickens", "Shakespeare", "Twain", "Austen"], "answerIndex": 1, "sourceRef": "literature" },
+    { "id": "c10", "prompt": "What gas do plants absorb?", "choices": ["Nitrogen", "Oxygen", "Carbon Dioxide", "Methane"], "answerIndex": 2, "sourceRef": "science" },
+    { "id": "c11", "prompt": "How many days are in a leap year?", "choices": ["364", "365", "366", "367"], "answerIndex": 2, "sourceRef": "general-knowledge" },
+    { "id": "c12", "prompt": "Which planet is known as the Red Planet?", "choices": ["Venus", "Mars", "Jupiter", "Saturn"], "answerIndex": 1, "sourceRef": "science" }
   ]
 }
