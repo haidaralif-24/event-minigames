@@ -26,13 +26,12 @@ export async function login(username, password) {
     const players = { ...(current.players || {}) };
     if (account.role === 'player') {
       const existing = players[account.playerId];
-      if (existing?.connected && existing.sessionOwner && existing.sessionOwner !== account.username) throw new Error('This player is already connected.');
+      if (existing?.connected) throw new Error('This player is already connected on another device.');
       players[account.playerId] = {
         id: account.playerId,
         name: account.name,
         username: account.username,
         connected: true,
-        sessionOwner: account.username,
         score: existing?.score || 0,
         rapidScore: existing?.rapidScore || 0,
         position: existing?.position || 0,
@@ -40,48 +39,30 @@ export async function login(username, password) {
         lastSeenAt: serverTimestamp(),
       };
     }
-    const next = { ...current, players, maxPlayers: MAX_PLAYERS, updatedAt: serverTimestamp() };
+    const next = { ...current, players, hostId: 'host', hostName: HOST_ACCOUNT.name, maxPlayers: MAX_PLAYERS, updatedAt: serverTimestamp() };
     if (!snapshot.exists()) transaction.set(ref, next); else transaction.update(ref, next);
   });
   return saveSession({ roomCode: 'current', playerId: account.role === 'player' ? account.playerId : 'host', role: account.role, name: account.name, username: account.username });
 }
 
-export async function createRoom() {
-  return login(HOST_ACCOUNT.username, HOST_ACCOUNT.password);
-}
-
-export async function joinRoom(_unusedRoomCode, username, password) {
-  return login(username, password);
-}
-
-export function subscribeToRoom(_roomCode, callback, onError) {
-  return onSnapshot(gameRef(), (snapshot) => callback(snapshot.exists() ? { id: GAME_PATH, ...snapshot.data() } : null), onError);
-}
-
-export async function updateRoom(_roomCode, updates) {
-  await updateDoc(gameRef(), { ...updates, updatedAt: serverTimestamp() });
-}
+export async function createRoom() { return login(HOST_ACCOUNT.username, HOST_ACCOUNT.password); }
+export async function joinRoom(_unusedRoomCode, username, password) { return login(username, password); }
+export function subscribeToRoom(_roomCode, callback, onError) { return onSnapshot(gameRef(), (snapshot) => callback(snapshot.exists() ? { id: GAME_PATH, ...snapshot.data() } : null), onError); }
+export async function updateRoom(_roomCode, updates) { await updateDoc(gameRef(), { ...updates, updatedAt: serverTimestamp() }); }
 
 export async function submitRapidAnswer(_roomCode, playerId, answer) {
   const ref = gameRef();
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error('Game is not initialized.');
-    const room = snapshot.data();
-    const shot = room.rapidShot || {};
-    const index = shot.questionIndex || 0;
+    const room = snapshot.data(); const shot = room.rapidShot || {}; const index = shot.questionIndex || 0;
     if (room.phase !== 'rapid-shot') throw new Error('Rapid shot is not active.');
     if (!room.players?.[playerId]?.connected) throw new Error('Player is not connected.');
     if (shot.submitted?.[playerId]) throw new Error('You already answered this question.');
     const expected = RAPID_QUESTIONS[index]?.answer?.trim().toLowerCase();
     const correct = answer.trim().toLowerCase() === expected;
     const score = (shot.scores?.[playerId] || 0) + (correct ? 1 : 0);
-    transaction.update(ref, {
-      [`rapidShot.answers.${playerId}`]: answer.trim(),
-      [`rapidShot.scores.${playerId}`]: score,
-      [`rapidShot.submitted.${playerId}`]: true,
-      updatedAt: serverTimestamp(),
-    });
+    transaction.update(ref, { [`rapidShot.answers.${playerId}`]: answer.trim(), [`rapidShot.scores.${playerId}`]: score, [`rapidShot.submitted.${playerId}`]: true, updatedAt: serverTimestamp() });
   });
 }
 
@@ -95,17 +76,9 @@ export async function resetGame() {
   const snapshot = await getDoc(gameRef());
   const players = {};
   Object.values(snapshot.exists() ? (snapshot.data().players || {}) : {}).forEach((player) => {
-    players[player.id] = {
-      id: player.id,
-      name: player.name,
-      username: player.username,
-      connected: false,
-      score: 0,
-      rapidScore: 0,
-      position: 0,
-    };
+    players[player.id] = { id: player.id, name: player.name, username: player.username, connected: false, score: 0, rapidScore: 0, position: 0 };
   });
-  await setDoc(gameRef(), { ...getInitialGameState(), players, maxPlayers: MAX_PLAYERS, resetAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  await setDoc(gameRef(), { ...getInitialGameState(), players, hostId: 'host', hostName: HOST_ACCOUNT.name, maxPlayers: MAX_PLAYERS, resetAt: serverTimestamp(), updatedAt: serverTimestamp() });
 }
 
 export function getPlayerAccounts() { return PLAYER_ACCOUNTS; }
