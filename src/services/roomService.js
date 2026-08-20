@@ -2,6 +2,8 @@ import { doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, updat
 import { db } from './firebase.js';
 import { getInitialGameState, MAX_PLAYERS, RAPID_QUESTIONS } from './gameLogic.js';
 import { ALL_ACCOUNTS, HOST_ACCOUNT, PLAYER_ACCOUNTS } from '../data/loginAccounts.js';
+import boardTiles from '../data/boardTiles.json';
+import challengeContent from '../content/maulid-nabi/challenge.json';
 
 const GAME_PATH = 'gameState/current';
 const SESSION_KEY = 'event-minigame-player-session';
@@ -82,3 +84,72 @@ export async function resetGame() {
 }
 
 export function getPlayerAccounts() { return PLAYER_ACCOUNTS; }
+
+export async function rollForActivePlayer(playerId, value) {
+  const roll = Math.min(6, Math.max(1, Number(value) || 1));
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(gameRef());
+    if (!snapshot.exists()) throw new Error('Game is not initialized.');
+    const game = snapshot.data();
+    const activePlayerId = game.turnOrder?.[game.activePlayerIndex ?? 0];
+    if (game.phase !== 'board' || activePlayerId !== playerId || game.lastRoll?.playerId === playerId) throw new Error('It is not your turn to roll.');
+
+    const initialPosition = game.boardPositions?.[playerId] || 0;
+    const landedPosition = Math.min(boardTiles.length - 1, initialPosition + roll);
+    const landedTile = boardTiles[landedPosition];
+    const boardPositions = { ...(game.boardPositions || {}), [playerId]: landedPosition };
+    const playerCheckpoints = { ...(game.playerCheckpoints || {}) };
+    const base = { boardPositions, playerCheckpoints, lastRoll: { value: roll, playerId, landedPosition }, updatedAt: serverTimestamp() };
+
+    if (landedTile?.type === 'challenge') {
+      const questionIndex = (landedPosition + (game.round || 0) + playerId.length) % challengeContent.questions.length;
+      transaction.update(gameRef(), { ...base, phase: 'challenge', challenge: { teamId: playerId, questionId: challengeContent.questions[questionIndex].id, landedPosition, startedAt: serverTimestamp(), resolved: false } });
+      return;
+    }
+
+    let finalPosition = landedPosition;
+    if (landedTile?.type === 'bonus') finalPosition = Math.min(boardTiles.length - 1, landedPosition + (landedTile.move || 0));
+    if (landedTile?.type === 'penalty') finalPosition = Math.max(playerCheckpoints[playerId] || 0, landedPosition + (landedTile.move || 0));
+    if (landedTile?.type === 'checkpoint') playerCheckpoints[playerId] = landedPosition;
+    boardPositions[playerId] = finalPosition;
+    transaction.update(gameRef(), {
+      ...base,
+      boardPositions,
+      playerCheckpoints,
+      lastRoll: { value: roll, playerId, landedPosition, finalPosition, tileType: landedTile?.type || 'normal' },
+      ...(finalPosition >= boardTiles.length - 1 ? { winner: playerId, phase: 'finished' } : {}),
+    });
+  });
+}
+
+export async function submitChallengeChoice(playerId, choiceIndex) {
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(gameRef());
+    if (!snapshot.exists()) throw new Error('Game is not initialized.');
+    const game = snapshot.data();
+    const challenge = game.challenge;
+    if (game.phase !== 'challenge' || !challenge || challenge.teamId !== playerId || challenge.resolved) throw new Error('This challenge is not available.');
+    const question = challengeContent.questions.find((item) => item.id === challenge.questionId);
+    if (!question) throw new Error('Challenge question not found.');
+
+    const correct = Number(choiceIndex) === question.answerIndex;
+    const playerCheckpoints = { ...(game.playerCheckpoints || {}) };
+    const boardPositions = { ...(game.boardPositions || {}) };
+    const currentPosition = boardPositions[playerId] || challenge.landedPosition || 0;
+    const move = correct ? challengeContent.winTiles : -challengeContent.loseTiles;
+    const finalPosition = correct
+      ? Math.min(boardTiles.length - 1, currentPosition + move)
+      : Math.max(playerCheckpoints[playerId] || 0, currentPosition + move);
+    boardPositions[playerId] = finalPosition;
+    if (boardTiles[finalPosition]?.type === 'checkpoint') playerCheckpoints[playerId] = finalPosition;
+    transaction.update(gameRef(), {
+      boardPositions,
+      playerCheckpoints,
+      challenge: { ...challenge, resolved: true, correct, choiceIndex: Number(choiceIndex), finalPosition, answeredAt: serverTimestamp() },
+      lastChallenge: { playerId, correct, move, finalPosition },
+      phase: finalPosition >= boardTiles.length - 1 ? 'finished' : 'board',
+      ...(finalPosition >= boardTiles.length - 1 ? { winner: playerId } : {}),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}

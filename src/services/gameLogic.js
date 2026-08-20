@@ -10,7 +10,7 @@ export const RAPID_QUESTIONS = [
 ];
 export function rollDice(sides = 6) { return Math.floor(Math.random() * sides) + 1; }
 export function shuffleArray(array) { const shuffled = [...array]; for (let i = shuffled.length - 1; i > 0; i -= 1) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } return shuffled; }
-export function getInitialGameState() { return { phase: 'lobby', round: 0, turnOrder: [], activePlayerIndex: 0, boardPositions: {}, diceSize: 6, lastRoll: null, winner: null, rapidShot: { questionIndex: 0, answers: {}, scores: {}, submitted: {} }, minigame: null }; }
+export function getInitialGameState() { return { phase: 'lobby', round: 0, turnOrder: [], activePlayerIndex: 0, boardPositions: {}, playerCheckpoints: {}, diceSize: 6, lastRoll: null, winner: null, rapidShot: { questionIndex: 0, answers: {}, scores: {}, submitted: {} }, minigame: null }; }
 export function getPlayerIds(players = {}) { return Object.keys(players).filter((id) => players[id]); }
 export function getActivePlayerId(gameState) { return gameState?.turnOrder?.[gameState?.activePlayerIndex ?? 0] || null; }
 export function resolveRapidShotOrder(players, rapidScores = {}) { return getPlayerIds(players).sort((a, b) => (rapidScores[b] || 0) - (rapidScores[a] || 0) || Math.random() - 0.5); }

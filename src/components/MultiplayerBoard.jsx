@@ -1,11 +1,286 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { animate, motion, useMotionValue } from 'framer-motion';
 import boardTiles from '../data/boardTiles.json';
-import { TILE_TYPES, TOKEN_COLORS } from '../data/constants.js';
+import { TOKEN_COLORS } from '../data/constants.js';
 
-const points = Array.from({ length: 67 }, (_, i) => {
-  const t = i / 66;
-  const angle = t * Math.PI * 6.2;
-  const radius = 300 - t * 245;
-  return { x: 400 + Math.cos(angle) * radius, y: 300 + Math.sin(angle) * radius * 0.62 };
-});
-function style(tile){const base={width:52,height:52,borderRadius:14,display:'grid',placeItems:'center',fontSize:10,fontWeight:900,position:'absolute',border:'3px solid #18233f',boxShadow:'0 4px 10px rgba(24,35,63,.18)'};const map={start:['#4dff79','#18233f'],finish:['#ff5555','#fff'],bonus:['#ffea4d','#18233f'],penalty:['#ff8c4d','#18233f'],challenge:['#4d79ff','#fff'],normal:['#fffdf5','#18233f']};const [background,color]=map[tile?.type]||map.normal;return {...base,background,color};}
-export default function MultiplayerBoard({boardPositions={},players={}}){return <div className="relative w-full overflow-hidden rounded-[2rem] border-4 border-[#18233f] bg-[#bde3ee] shadow-2xl" style={{height:620}}><div className="absolute inset-0 opacity-50" style={{background:'radial-gradient(circle at 20% 20%, white 0 4%, transparent 5%), radial-gradient(circle at 80% 30%, white 0 3%, transparent 4%)',backgroundSize:'140px 120px'}}/>{points.map((p,i)=>{const tile=boardTiles[i]||{type:'normal'};const tokens=Object.entries(boardPositions).filter(([,pos])=>pos===i);return <div key={i} style={{...style(tile),left:p.x-26,top:p.y-26}}><span>{tile.type===TILE_TYPES.START?'START':tile.type===TILE_TYPES.FINISH?'FINISH':tile.type===TILE_TYPES.BONUS?`+${tile.move||0}`:tile.type===TILE_TYPES.PENALTY?`${tile.move||0}`:tile.type===TILE_TYPES.CHALLENGE?'?':i}</span>{tokens.map(([id,j])=>{const ids=Object.keys(players);const color=TOKEN_COLORS[Math.max(0,ids.indexOf(id))%TOKEN_COLORS.length];return <span key={id} title={players[id]?.name} className="absolute h-8 w-8 rounded-full border-4 border-[#18233f] grid place-items-center text-white text-[10px] font-black" style={{background:color,transform:`translate(${(j%3-1)*14}px,${(j%2)*14}px)`}}>{(ids.indexOf(id)+1)}</span>;})}</div>})}<div className="absolute left-5 top-5 rounded-2xl border-4 border-[#18233f] bg-[#fff8e7]/95 px-4 py-3"><p className="text-[10px] font-black uppercase tracking-widest text-[#ff8c4d]">Adventure Board</p><p className="font-black text-[#18233f]">67 tiles • 7 players</p></div></div>}
+const MAP_WIDTH = 2000;
+const MAP_HEIGHT = 1150;
+const MAP_PADDING = 85;
+const TOTAL_TILES = 67;
+const CX = 1000;
+const CY = 575;
+const ASPECT = 1.55;
+const INK = '#1a1a2e';
+
+const tileStyle = {
+  start: { fill: '#4dff79', icon: 'S' },
+  finish: { fill: '#ff5555', icon: 'F', light: true },
+  normal: { fill: '#fffdf5' },
+  bonus: { fill: '#ffea4d', icon: '★' },
+  challenge: { fill: '#4d79ff', icon: '?', light: true },
+  penalty: { fill: '#ff8c4d', icon: '!' },
+  checkpoint: { fill: '#a64dff', icon: '⌂', light: true },
+};
+
+function buildSpiralPoints() {
+  const maxRadius = 520;
+  const minRadius = 100;
+  const startAngle = 0.35;
+  const turns = 2.2;
+  const pointAt = (progress) => {
+    const radius = minRadius + (maxRadius - minRadius) * (1 - progress) ** 0.82;
+    const angle = startAngle + progress * turns * Math.PI * 2;
+    return {
+      x: CX + radius * Math.cos(angle) * ASPECT,
+      y: CY + radius * Math.sin(angle),
+    };
+  };
+
+  // The raw spiral advances by angle, which makes tiles bunch up near the centre.
+  // Resampling it by accumulated arc length keeps every step visually consistent.
+  const samples = Array.from({ length: 4097 }, (_, index) => pointAt(index / 4096));
+  const lengths = [0];
+  for (let index = 1; index < samples.length; index += 1) {
+    lengths.push(lengths[index - 1] + Math.hypot(samples[index].x - samples[index - 1].x, samples[index].y - samples[index - 1].y));
+  }
+  const totalLength = lengths[lengths.length - 1];
+  let sampleIndex = 1;
+  return Array.from({ length: TOTAL_TILES }, (_, index) => {
+    const targetLength = (index / (TOTAL_TILES - 1)) * totalLength;
+    while (lengths[sampleIndex] < targetLength && sampleIndex < lengths.length - 1) sampleIndex += 1;
+    const previousLength = lengths[sampleIndex - 1];
+    const segmentLength = lengths[sampleIndex] - previousLength || 1;
+    const progress = (targetLength - previousLength) / segmentLength;
+    return {
+      x: samples[sampleIndex - 1].x + (samples[sampleIndex].x - samples[sampleIndex - 1].x) * progress,
+      y: samples[sampleIndex - 1].y + (samples[sampleIndex].y - samples[sampleIndex - 1].y) * progress,
+    };
+  });
+}
+
+function catmullRom(points) {
+  let path = '';
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const p0 = points[index === 0 ? 0 : index - 1];
+    const p1 = points[index];
+    const p2 = points[index + 1];
+    const p3 = points[index + 2 < points.length ? index + 2 : index + 1];
+    if (index === 0) path += `M ${p1.x} ${p1.y} `;
+    path += `C ${p1.x + (p2.x - p0.x) / 6} ${p1.y + (p2.y - p0.y) / 6}, `;
+    path += `${p2.x - (p3.x - p1.x) / 6} ${p2.y - (p3.y - p1.y) / 6}, ${p2.x} ${p2.y} `;
+  }
+  return path;
+}
+
+function blobPoints(radius, count, phase) {
+  return Array.from({ length: count }, (_, index) => {
+    const angle = (index / count) * Math.PI * 2;
+    const jitter = 1 + 0.1 * Math.sin(angle * 3 + phase) + 0.05 * Math.sin(angle * 5 + phase * 1.7);
+    return { x: CX + radius * jitter * Math.cos(angle) * ASPECT, y: CY + radius * jitter * Math.sin(angle) };
+  });
+}
+
+function smoothBlob(points) {
+  const first = points[0];
+  const last = points[points.length - 1];
+  let path = `M ${(first.x + last.x) / 2} ${(first.y + last.y) / 2} `;
+  points.forEach((point, index) => {
+    const next = points[(index + 1) % points.length];
+    path += `Q ${point.x} ${point.y}, ${(point.x + next.x) / 2} ${(point.y + next.y) / 2} `;
+  });
+  return `${path}Z`;
+}
+
+function Palm({ x, y, scale = 1 }) {
+  return <g transform={`translate(${x} ${y}) scale(${scale})`}>
+    <ellipse cy="4" rx="16" ry="5" fill={INK} opacity=".18" />
+    <path d="M0 0C-4-22 2-40-6-58" fill="none" stroke="#8a5a32" strokeWidth="7" strokeLinecap="round" />
+    <g transform="translate(-6 -58)" fill="#4bab4c" stroke={INK} strokeWidth="2.5">
+      <path d="M0 0C-22-6-34-18-38-30C-24-22-10-14 0 0Z" />
+      <path d="M0 0C20-8 30-20 32-34C20-24 8-14 0 0Z" fill="#3f9142" />
+      <path d="M0 0C-14-20-12-34 0-46C10-34 12-20 0 0Z" />
+    </g>
+  </g>;
+}
+
+function Tree({ x, y, scale = 1 }) {
+  return <g transform={`translate(${x} ${y}) scale(${scale})`}>
+    <ellipse cy="26" rx="15" ry="6" fill={INK} opacity=".18" />
+    <path d="M-4 24h8l-1-30h-6z" fill="#8a5a32" stroke={INK} strokeWidth="2" />
+    <circle cy="-14" r="20" fill="#3f9142" stroke={INK} strokeWidth="3" />
+    <circle cx="-10" cy="-24" r="13" fill="#4bab4c" stroke={INK} strokeWidth="3" />
+    <circle cx="11" cy="-22" r="14" fill="#4bab4c" stroke={INK} strokeWidth="3" />
+  </g>;
+}
+
+function Rock({ x, y, scale = 1 }) {
+  return <g transform={`translate(${x} ${y}) scale(${scale})`}>
+    <ellipse cy="9" rx="17" ry="5" fill={INK} opacity=".16" />
+    <path d="M-14 7L-10-7 0-13 13-6 10 7Z" fill="#9aa79b" stroke={INK} strokeWidth="2.5" />
+  </g>;
+}
+
+function Hut({ x, y, scale = 1 }) {
+  return <g transform={`translate(${x} ${y}) scale(${scale})`}>
+    <ellipse cy="18" rx="24" ry="6" fill={INK} opacity=".18" />
+    <rect x="-14" y="-2" width="28" height="20" fill="#e0c179" stroke={INK} strokeWidth="2.5" />
+    <path d="M-18-2L0-22 18-2Z" fill="#c9673d" stroke={INK} strokeWidth="2.5" />
+  </g>;
+}
+
+function Dock({ x, y }) {
+  return <g transform={`translate(${x} ${y})`}>
+    <rect x="-10" y="-70" width="16" height="110" fill="#8a5a32" stroke={INK} strokeWidth="3" />
+    <path d="M-40 30C-10 50 30 50 55 25C45 45 5 65-40 30Z" fill="#c9673d" stroke={INK} strokeWidth="3" />
+    <path d="M-2-66L52-20-2-8Z" fill="#fff8e7" stroke={INK} strokeWidth="3" />
+  </g>;
+}
+
+function Stickman({ color }) {
+  return <g filter="url(#softShadow)">
+    <ellipse cy="24" rx="13" ry="4" fill={INK} opacity=".22" />
+    <path d="M0 2v14M-8 8h16M0 16l-8 9M0 16l8 9" stroke={INK} strokeWidth="4.5" strokeLinecap="round" />
+    <circle cy="-8" r="10" fill={color} stroke={INK} strokeWidth="3.5" />
+    <circle cx="-3.4" cy="-9" r="1.6" fill={INK} /><circle cx="3.4" cy="-9" r="1.6" fill={INK} />
+  </g>;
+}
+
+function TrailToken({ color, offsetX, offsetY, pathRef, tileIndex, tileLengths }) {
+  const trailLength = useMotionValue(0);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const [placed, setPlaced] = useState(false);
+  const initialized = useRef(false);
+  const previousTile = useRef(tileIndex);
+  useEffect(() => {
+    const path = pathRef.current;
+    const target = tileLengths[tileIndex];
+    if (!path || target === undefined) return undefined;
+    const place = (length, hop = 0) => {
+      const point = path.getPointAtLength(length);
+      x.set(point.x + offsetX);
+      y.set(point.y - 27 + offsetY - hop);
+    };
+    if (!initialized.current) {
+      initialized.current = true;
+      previousTile.current = tileIndex;
+      trailLength.set(target);
+      place(target);
+      setPlaced(true);
+      return undefined;
+    }
+    const from = trailLength.get();
+    const distance = Math.max(1, Math.abs(tileIndex - previousTile.current));
+    previousTile.current = tileIndex;
+    if (Math.abs(target - from) < 0.5) return undefined;
+    const controls = animate(trailLength, target, {
+      duration: distance * 0.175,
+      ease: [0.34, 1.32, 0.64, 1],
+      onUpdate: (length) => {
+        const progress = Math.min(1, Math.abs(length - from) / Math.abs(target - from));
+        place(length, Math.abs(Math.sin(progress * Math.PI * distance)) * 24);
+      },
+      onComplete: () => place(target),
+    });
+    return () => controls.stop();
+  }, [offsetX, offsetY, pathRef, tileIndex, tileLengths, trailLength, x, y]);
+  return <motion.g style={{ x, y, opacity: placed ? 1 : 0 }}><Stickman color={color} /></motion.g>;
+}
+
+export default function MultiplayerBoard({ boardPositions = {}, players = {} }) {
+  const points = useMemo(buildSpiralPoints, []);
+  const trailPath = useMemo(() => catmullRom(points), [points]);
+  const sandPath = useMemo(() => smoothBlob(blobPoints(600, 26, 0.4)), []);
+  const grassPath = useMemo(() => smoothBlob(blobPoints(530, 26, 1.1)), []);
+  const playerIds = Object.keys(players).sort();
+  const trailGeometryRef = useRef(null);
+  const [tileLengths, setTileLengths] = useState({});
+
+  useEffect(() => {
+    const path = trailGeometryRef.current;
+    if (!path) return;
+    const totalLength = path.getTotalLength();
+    const samples = Array.from({ length: Math.ceil(totalLength / 2) + 1 }, (_, index, array) => {
+      const length = (index / (array.length - 1)) * totalLength;
+      const point = path.getPointAtLength(length);
+      return { length, x: point.x, y: point.y };
+    });
+    setTileLengths(Object.fromEntries(points.map((point, index) => {
+      const closest = samples.reduce((best, sample) => ((sample.x - point.x) ** 2 + (sample.y - point.y) ** 2 < (best.x - point.x) ** 2 + (best.y - point.y) ** 2 ? sample : best));
+      return [index, closest.length];
+    })));
+  }, [points, trailPath]);
+
+  return <div className="relative w-full overflow-hidden rounded-[2rem] border-4 border-[#18233f] bg-[#2c8fae] shadow-2xl" style={{ height: 'clamp(620px, 92vh, 980px)' }}>
+    <svg className="h-full w-full" viewBox={`${-MAP_PADDING} ${-MAP_PADDING} ${MAP_WIDTH + MAP_PADDING * 2} ${MAP_HEIGHT + MAP_PADDING * 2}`} preserveAspectRatio="xMidYMid slice" role="img" aria-label="Adventure Island board map">
+      <defs>
+        <linearGradient id="mp-ocean" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#3aa8c9" /><stop offset="1" stopColor="#1f7a9c" /></linearGradient>
+        <linearGradient id="mp-sand" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#f2dfa0" /><stop offset="1" stopColor="#e0c179" /></linearGradient>
+        <linearGradient id="mp-grass" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#c7e8a4" /><stop offset="1" stopColor="#8fc85e" /></linearGradient>
+        <linearGradient id="mp-trail" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#f5e2ac" /><stop offset="1" stopColor="#c99a55" /></linearGradient>
+        <radialGradient id="mp-peak" cx=".35" cy=".3" r=".8"><stop stopColor="#c98a5b" /><stop offset="1" stopColor="#8a5a35" /></radialGradient>
+        <filter id="softShadow" x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="6" stdDeviation="4" floodOpacity=".3" /></filter>
+      </defs>
+      <rect width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#mp-ocean)" />
+      {[700, 780, 860, 940].map((radius) => <ellipse key={radius} cx={CX} cy={CY} rx={radius * ASPECT} ry={radius} fill="none" stroke="#fff" strokeWidth="2" opacity=".13" />)}
+      <path d={sandPath} fill="url(#mp-sand)" stroke="#8a6a3a" strokeWidth="6" filter="url(#softShadow)" />
+      <path d={grassPath} fill="url(#mp-grass)" stroke="#5f9c3f" strokeWidth="5" />
+
+      <Palm x={279} y={255} scale={1.6} /><Palm x={1708} y={275} scale={1.7} /><Palm x={225} y={855} scale={1.6} /><Palm x={1748} y={835} scale={1.5} />
+      <Palm x={1000} y={145} scale={1.4} /><Palm x={1000} y={1015} scale={1.5} /><Tree x={559} y={185} scale={1.5} /><Tree x={1428} y={205} scale={1.4} />
+      <Tree x={439} y={955} scale={1.4} /><Tree x={1575} y={935} scale={1.6} />
+      <Rock x={760} y={225} scale={1.5} /><Rock x={1281} y={935} scale={1.4} /><Rock x={332} y={555} scale={1.3} /><Rock x={1668} y={555} scale={1.4} />
+      {[[626, 315, '#ffea4d'], [1240, 295, '#ff4da6'], [492, 715, '#ffea4d'], [1481, 715, '#ff4da6'], [866, 955, '#a64dff'], [1134, 175, '#4d79ff']].map(([x, y, color]) => <circle key={`${x}-${y}`} cx={x} cy={y} r="4" fill={color} stroke={INK} strokeWidth="1.5" />)}
+      {points.map((point, index) => boardTiles[index]?.type === 'checkpoint' ? <Hut key={`hut-${index}`} x={point.x} y={point.y - 46} scale={1.3} /> : null)}
+
+      <path d={trailPath} fill="none" stroke="#8b6b38" strokeWidth="30" strokeLinecap="round" opacity=".28" />
+      <path d={trailPath} fill="none" stroke="url(#mp-trail)" strokeWidth="22" strokeLinecap="round" />
+      <path d={trailPath} fill="none" stroke="#fff6df" strokeWidth="5" strokeLinecap="round" strokeDasharray="1 20" opacity=".85" />
+      <path ref={trailGeometryRef} d={trailPath} fill="none" stroke="none" visibility="hidden" />
+
+      <g transform={`translate(${CX} ${CY})`} filter="url(#softShadow)">
+        <circle r="92" fill="url(#mp-peak)" stroke="#5a3a20" strokeWidth="6" />
+        <rect x="-28" y="-64" width="56" height="60" fill="#e7ddc8" stroke={INK} strokeWidth="4" />
+        <path d="M-34-64L0-98 34-64Z" fill="#c9673d" stroke={INK} strokeWidth="4" />
+        <rect x="-8" y="-30" width="16" height="26" fill="#5a3a20" stroke={INK} strokeWidth="2.5" />
+        <path d="M0-98v-22" stroke={INK} strokeWidth="3" />
+        <path d="M0-120L26-120 13-107Z" fill="#ff4d4d" stroke={INK} strokeWidth="2.5" />
+      </g>
+
+      <Dock x={points[0].x + 70} y={points[0].y + 30} />
+
+      {points.map((point, index) => {
+        const tile = boardTiles[index] || { type: 'normal' };
+        const style = tileStyle[tile.type] || tileStyle.normal;
+        const prominent = tile.type === 'start' || tile.type === 'finish';
+        const size = tile.type === 'finish' ? 82 : prominent ? 44 : 34;
+        return <g key={index} transform={`translate(${point.x} ${point.y})`} filter="url(#softShadow)">
+          {tile.type === 'finish' && <>
+            <circle r="66" fill="#ffe36b" opacity=".34" />
+            <circle r="57" fill="none" stroke="#fff3a6" strokeWidth="6" strokeDasharray="10 8" />
+            <path d="M-37-48L-61-76M37-48L61-76" stroke="#fff3a6" strokeWidth="6" strokeLinecap="round" />
+            <text x="-66" y="-70" textAnchor="middle" fontSize="23" fill="#ffea4d" stroke={INK} strokeWidth="2" paintOrder="stroke" fontFamily="Nunito, sans-serif">★</text>
+            <text x="66" y="-70" textAnchor="middle" fontSize="23" fill="#ffea4d" stroke={INK} strokeWidth="2" paintOrder="stroke" fontFamily="Nunito, sans-serif">★</text>
+          </>}
+          <rect x={-size / 2} y={-size / 2} width={size} height={size} rx={tile.type === 'finish' ? 20 : 10} fill={style.fill} stroke={INK} strokeWidth={tile.type === 'finish' ? 5 : 3.5} />
+          {tile.type === 'finish' ? <>
+            <text y="9" textAnchor="middle" fontSize="31" fontWeight="900" fill="#fff8e7" stroke={INK} strokeWidth="1.5" paintOrder="stroke" fontFamily="Nunito, sans-serif">67</text>
+            <text y="51" textAnchor="middle" fontSize="12" fontWeight="900" fill={INK} fontFamily="Nunito, sans-serif">FINISH</text>
+          </> : <text y="5" textAnchor="middle" fontSize={style.icon ? 16 : 11} fontWeight="900" fill={style.light ? '#fff' : INK} fontFamily="Nunito, sans-serif">{style.icon || index + 1}</text>}
+        </g>;
+      })}
+
+      {Object.entries(boardPositions).map(([playerId, rawPosition], tokenIndex) => {
+        const tileIndex = Math.min(TOTAL_TILES - 1, Math.max(0, Number(rawPosition) || 0));
+        const playerIndex = Math.max(0, playerIds.indexOf(playerId));
+        const offsetX = (tokenIndex % 3 - 1) * 18;
+        const offsetY = Math.floor(tokenIndex / 3) * 17;
+        return <TrailToken key={playerId} color={TOKEN_COLORS[playerIndex % TOKEN_COLORS.length]} offsetX={offsetX} offsetY={offsetY} pathRef={trailGeometryRef} tileIndex={tileIndex} tileLengths={tileLengths} />;
+      })}
+    </svg>
+    <div className="pointer-events-none absolute left-5 top-5 rounded-2xl border-4 border-[#18233f] bg-[#fff8e7]/95 px-4 py-3 shadow-[0_4px_0_#18233f]">
+      <p className="text-[10px] font-black uppercase tracking-widest text-[#ff8c4d]">Adventure Island</p>
+      <p className="font-display text-lg text-[#18233f]">67 tiles · 7 players</p>
+    </div>
+  </div>;
+}

@@ -1,11 +1,11 @@
-# Visual Theme: Stickman Party Exploration Map
+# Visual Theme: Adventure Island Exploration Map
 
 This is the spec to build to from the start — not a redesign of something
 that already exists. Read this before writing `Board.jsx` or any styling.
 
 ## Reference feeling
 Bright, chunky, toy-like party game — think Mario Party's board screen or
-mobile party games like Stickman Party. Bold flat shapes, thick black
+mobile party games. Bold flat shapes, thick black
 outlines, saturated primary-ish colors, rounded chunky UI, everything a
 little bouncy. NOT glassmorphism, NOT neon/glow, NOT thin-line minimalism,
 NOT a corporate dashboard look. The board should feel like a toy or a map

@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { animate, motion, useMotionValue } from 'framer-motion';
 import { db } from '../firebase';
 import boardTiles from '../data/boardTiles.json';
 import { TEAM_COLORS } from '../data/constants';
@@ -32,10 +33,11 @@ const INNER_START_ANGLE = Math.PI * 0.5; // bottom
 // Transition bridge: tiles 34-35 (2 tiles linking outer→inner)
 const BRIDGE_COUNT = 2;
 
-// Final approach: tiles 63-66 spiral inward along the right side to the centre finish (tile 67)
+// Final approach: tiles 63-66 continue the inner loop while curling into the finish.
 const FINAL_COUNT = 4;
-const FINAL_RADII = [200, 140, 95, 0];
-const FINAL_ANGLES = [1.0, 0.5, 0.0, 0.0];
+const FINAL_TURN = Math.PI * 0.72;
+
+const smoothstep = (t) => t * t * (3 - 2 * t);
 
 function buildSpiralPositions(total) {
   const positions = [];
@@ -51,17 +53,17 @@ function buildSpiralPositions(total) {
 
   // --- Bridge: outer→inner transition ---
   if (positions.length < total) {
-    const lastOuter = positions[positions.length - 1];
-    const firstInnerAngle = INNER_START_ANGLE;
-    const firstInner = {
-      x: CX + INNER_RX * Math.cos(firstInnerAngle),
-      y: CY + INNER_RY * Math.sin(firstInnerAngle),
-    };
+    const lastOuterAngle = OUTER_START_ANGLE + ((OUTER_COUNT - 1) / OUTER_COUNT) * Math.PI * 2;
+    // Unwrap the inner-loop start forward from the outer loop so the bridge keeps rotating.
+    const firstInnerAngle = INNER_START_ANGLE + Math.PI * 2;
     for (let i = 1; i <= BRIDGE_COUNT && positions.length < total; i++) {
-      const t = i / (BRIDGE_COUNT + 1);
+      const t = smoothstep(i / (BRIDGE_COUNT + 1));
+      const angle = lastOuterAngle + (firstInnerAngle - lastOuterAngle) * t;
+      const rx = OUTER_RX + (INNER_RX - OUTER_RX) * t;
+      const ry = OUTER_RY + (INNER_RY - OUTER_RY) * t;
       positions.push({
-        x: lastOuter.x + (firstInner.x - lastOuter.x) * t,
-        y: lastOuter.y + (firstInner.y - lastOuter.y) * t,
+        x: CX + rx * Math.cos(angle),
+        y: CY + ry * Math.sin(angle),
       });
     }
   }
@@ -75,13 +77,14 @@ function buildSpiralPositions(total) {
     });
   }
 
-  // --- Final approach: spiral inward to the centre finish, keeping tile 66 clear of tile 67 ---
+  // --- Final approach: keep turning while smoothly shrinking the inner-loop ellipse to centre ---
+  const lastInnerAngle = INNER_START_ANGLE + ((INNER_COUNT - 1) / INNER_COUNT) * Math.PI * 2;
   for (let i = 0; i < FINAL_COUNT && positions.length < total; i++) {
-    const r = FINAL_RADII[i];
-    const ry = r * (INNER_RY / INNER_RX);
+    const t = smoothstep((i + 1) / FINAL_COUNT);
+    const angle = lastInnerAngle + FINAL_TURN * t;
     positions.push({
-      x: CX + r * Math.cos(FINAL_ANGLES[i]),
-      y: CY + ry * Math.sin(FINAL_ANGLES[i]),
+      x: CX + INNER_RX * (1 - t) * Math.cos(angle),
+      y: CY + INNER_RY * (1 - t) * Math.sin(angle),
     });
   }
 
@@ -255,6 +258,72 @@ function Stickman({ color, x, y }) {
   );
 }
 
+function AnimatedToken({ color, offset, pathRef, tileIndex, tilePathLengths }) {
+  const trailLength = useMotionValue(0);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const scaleX = useMotionValue(1);
+  const scaleY = useMotionValue(1);
+  const [isPlaced, setIsPlaced] = useState(false);
+  const hasInitialPosition = useRef(false);
+  const previousTargetTile = useRef(tileIndex);
+
+  useEffect(() => {
+    const path = pathRef.current;
+    const targetLength = tilePathLengths[tileIndex];
+    if (!path || targetLength === undefined) return undefined;
+
+    const placeAt = (length, hop = 0) => {
+      const point = path.getPointAtLength(length);
+      x.set(point.x + offset);
+      y.set(point.y - 30 - hop);
+    };
+
+    if (!hasInitialPosition.current) {
+      trailLength.set(targetLength);
+      placeAt(targetLength);
+      hasInitialPosition.current = true;
+      previousTargetTile.current = tileIndex;
+      setIsPlaced(true);
+      return undefined;
+    }
+
+    const fromLength = trailLength.get();
+    const tileDistance = Math.max(1, Math.abs(tileIndex - previousTargetTile.current));
+    previousTargetTile.current = tileIndex;
+    const lengthDistance = Math.abs(targetLength - fromLength);
+
+    if (lengthDistance < 0.5) {
+      trailLength.set(targetLength);
+      placeAt(targetLength);
+      return undefined;
+    }
+
+    const movement = animate(trailLength, targetLength, {
+      duration: tileDistance * 0.175,
+      ease: [0.34, 1.32, 0.64, 1],
+      onUpdate: (nextLength) => {
+        const progress = Math.min(1, Math.abs(nextLength - fromLength) / lengthDistance);
+        const hop = Math.abs(Math.sin(progress * Math.PI * tileDistance)) * 25;
+        placeAt(nextLength, hop);
+      },
+      onComplete: () => {
+        placeAt(targetLength);
+        animate(scaleX, [1, 1.14, 1], { duration: 0.22, ease: 'easeOut' });
+        animate(scaleY, [1, 0.84, 1], { duration: 0.22, ease: 'easeOut' });
+      },
+    });
+
+    return () => movement.stop();
+  }, [offset, pathRef, scaleX, scaleY, tileIndex, tilePathLengths, trailLength, x, y]);
+
+  return (
+    <motion.g style={{ x, y, scaleX, scaleY, opacity: isPlaced ? 1 : 0 }} filter="url(#softShadow)">
+      <Stickman color={color} x={0} y={0} />
+    </motion.g>
+  );
+}
+
 export default function Board() {
   const [positions, setPositions] = useState({});
   const [zoom, setZoom] = useState(1);
@@ -264,6 +333,8 @@ export default function Board() {
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const viewportRef = useRef(null);
   const dragRef = useRef(null);
+  const trailGeometryRef = useRef(null);
+  const [tilePathLengths, setTilePathLengths] = useState({});
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'gameState', 'current'), (snap) => {
@@ -354,6 +425,34 @@ export default function Board() {
 
   // Build trail path through all tile positions using Catmull-Rom spline
   const trailPath = useMemo(() => catmullRom(tiles.map(t => ({ x: t.x, y: t.y }))), [tiles]);
+
+  // Map every tile centre to its nearest point on the rendered spline. Tokens use these
+  // offsets to travel the same curved road that is visible on the board.
+  useEffect(() => {
+    const path = trailGeometryRef.current;
+    if (!path) return;
+    const totalLength = path.getTotalLength();
+    const sampleCount = Math.max(1, Math.ceil(totalLength / 2));
+    const samples = Array.from({ length: sampleCount + 1 }, (_, index) => {
+      const length = (index / sampleCount) * totalLength;
+      const point = path.getPointAtLength(length);
+      return { length, x: point.x, y: point.y };
+    });
+
+    const nextLengths = Object.fromEntries(tiles.map((tile) => {
+      let closest = samples[0];
+      let closestDistance = Infinity;
+      samples.forEach((sample) => {
+        const distance = (sample.x - tile.x) ** 2 + (sample.y - tile.y) ** 2;
+        if (distance < closestDistance) {
+          closest = sample;
+          closestDistance = distance;
+        }
+      });
+      return [tile.index, closest.length];
+    }));
+    setTilePathLengths(nextLengths);
+  }, [tiles, trailPath]);
 
   // Keep the island fully inside the map bounds so its coastline is not clipped by the SVG viewport.
   const sandPath = useMemo(() => smoothBlob(blobPoints(CX, CY, 620, 26, 0.4)), []);
@@ -455,6 +554,7 @@ export default function Board() {
           <path d={trailPath} fill="none" stroke="#8b6b38" strokeWidth="30" strokeLinecap="round" opacity=".28" />
           <path d={trailPath} fill="none" stroke="url(#trailGrad)" strokeWidth="22" strokeLinecap="round" />
           <path d={trailPath} fill="none" stroke="#fff6df" strokeWidth="5" strokeLinecap="round" strokeDasharray="1 20" opacity=".85" />
+          <path ref={trailGeometryRef} d={trailPath} fill="none" stroke="none" visibility="hidden" aria-hidden="true" />
 
           {/* Castle at centre, above the finish tile */}
           <Castle x={CX} y={CY - 155} />
@@ -504,14 +604,16 @@ export default function Board() {
           <Dock x={startTile.x + 70} y={startTile.y + 30} />
 
           {Object.entries(positions).map(([teamId, tileIndex], idx) => {
-            const tile = tiles[tileIndex] || tiles[0];
             const offset = idx % 2 === 0 ? -16 : 16;
+            const safeTileIndex = Math.min(TOTAL_TILES - 1, Math.max(0, Number(tileIndex) || 0));
             return (
-              <Stickman
+              <AnimatedToken
                 key={teamId}
                 color={TEAM_COLORS[idx % TEAM_COLORS.length]}
-                x={tile.x + offset}
-                y={tile.y - 30}
+                offset={offset}
+                pathRef={trailGeometryRef}
+                tileIndex={safeTileIndex}
+                tilePathLengths={tilePathLengths}
               />
             );
           })}
