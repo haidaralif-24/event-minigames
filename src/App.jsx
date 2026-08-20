@@ -1,31 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import HostPage from './pages/Host.jsx';
-import PlayPage from './pages/Play.jsx';
-import BoardPage from './pages/Board.jsx';
-import LoginPage from './pages/Login.jsx';
-
-function RequireHost({ children }) {
-  return sessionStorage.getItem('auth') === 'host' ? children : <Navigate to="/" replace />;
-}
-
-function RequireTeam({ children }) {
-  return sessionStorage.getItem('auth') === 'team' ? children : <Navigate to="/" replace />;
-}
-
-function RequireAny({ children }) {
-  const auth = sessionStorage.getItem('auth');
-  return (auth === 'host' || auth === 'team') ? children : <Navigate to="/" replace />;
-}
-
-function App() {
-  return (
-    <Routes>
-      <Route path="/" element={<LoginPage />} />
-      <Route path="/host" element={<RequireHost><HostPage /></RequireHost>} />
-      <Route path="/play" element={<RequireTeam><PlayPage /></RequireTeam>} />
-      <Route path="/board" element={<RequireAny><BoardPage /></RequireAny>} />
-    </Routes>
-  );
-}
-
-export default App;
+import MultiplayerLobby from './pages/MultiplayerLobby2.jsx';
+import MultiplayerHost from './pages/MultiplayerHost.jsx';
+import MultiplayerPlay from './pages/MultiplayerPlay.jsx';
+function Guard({role,children}){const session=(()=>{try{return JSON.parse(localStorage.getItem('event-minigame-player-session')||'null')}catch{return null}})();return session?.role===role?children:<Navigate to="/" replace/>;}
+export default function App(){return <Routes><Route path="/" element={<MultiplayerLobby/>}/><Route path="/lobby" element={<MultiplayerLobby/>}/><Route path="/host" element={<Guard role="host"><MultiplayerHost/></Guard>}/><Route path="/play" element={<Guard role="player"><MultiplayerPlay/></Guard>}/><Route path="/board" element={<Guard role="host"><MultiplayerHost/></Guard>}/><Route path="*" element={<Navigate to="/" replace/>}/></Routes>}
