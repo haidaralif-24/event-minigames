@@ -2,22 +2,20 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function isHost() { return signedIn() && request.auth.token.email == 'host@event.app'; }
-    function isTeam() { return signedIn() && request.auth.token.email in ['team1@event.app', 'team2@event.app', 'team3@event.app', 'team4@event.app', 'team5@event.app', 'team6@event.app']; }
-    function myTeamId() { return request.auth.token.email == 'team1@event.app' ? 'team-1' : request.auth.token.email == 'team2@event.app' ? 'team-2' : request.auth.token.email == 'team3@event.app' ? 'team-3' : request.auth.token.email == 'team4@event.app' ? 'team-4' : request.auth.token.email == 'team5@event.app' ? 'team-5' : request.auth.token.email == 'team6@event.app' ? 'team-6' : ''; }
-    function canClaimOwnTeam() { let existingTeam = resource.data.teams.get(myTeamId(), null); let existingLastSeenAt = existingTeam == null ? 0 : existingTeam.get('lastSeenAt', 0); let existingUid = existingTeam == null ? '' : existingTeam.get('uid', ''); return isTeam() && resource.data.phase == 'lobby' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teams']) && request.resource.data.teams.diff(resource.data.teams).affectedKeys().hasOnly([myTeamId()]) && request.resource.data.teams[myTeamId()].uid == request.auth.uid && (existingTeam == null || existingUid == request.auth.uid || request.time.toMillis() - existingLastSeenAt >= 30000); }
-    function canTouchOwnTeam() { return isTeam() && myTeamId() in resource.data.teams.keys() && resource.data.teams[myTeamId()].uid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teams']) && request.resource.data.teams.diff(resource.data.teams).affectedKeys().hasOnly([myTeamId()]) && request.resource.data.teams[myTeamId()].uid == request.auth.uid && request.resource.data.teams[myTeamId()].sessionId == resource.data.teams[myTeamId()].sessionId; }
-    function ownsTeam() { return isTeam() && myTeamId() in resource.data.teams.keys() && resource.data.teams[myTeamId()].uid == request.auth.uid; }
-    match /rooms/{roomId} {
-      // Multiplayer rooms use anonymous Firebase Auth. These rules are intentionally permissive for the current event test build; tighten writes before a public launch.
+
+    // The event currently uses Firebase anonymous authentication plus a fixed
+    // account login screen. These rules are intentionally permissive for the
+    // private event test build. Tighten writes before a public launch.
+    match /gameState/current {
       allow read, write: if signedIn();
     }
-    match /gameState/current {
-      allow get: if signedIn();
-      allow list: if false;
-      allow create, delete: if isHost();
-      allow update: if isHost() || canClaimOwnTeam() || canTouchOwnTeam();
+
+    match /rooms/{roomId} {
+      allow read, write: if false;
     }
-    match /{document=**} { allow read, write: if false; }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }
