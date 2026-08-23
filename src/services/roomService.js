@@ -52,7 +52,7 @@ export async function joinRoom(_unusedRoomCode, username, password) { return log
 export function subscribeToRoom(_roomCode, callback, onError) { return onSnapshot(gameRef(), (snapshot) => callback(snapshot.exists() ? { id: GAME_PATH, ...snapshot.data() } : null), onError); }
 export async function updateRoom(_roomCode, updates) { await updateDoc(gameRef(), { ...updates, updatedAt: serverTimestamp() }); }
 
-export async function submitRapidAnswer(_roomCode, playerId, answer) {
+export async function submitRapidAnswer(_roomCode, playerId, choiceIndex) {
   const ref = gameRef();
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
@@ -60,14 +60,15 @@ export async function submitRapidAnswer(_roomCode, playerId, answer) {
     const room = snapshot.data(); const shot = room.rapidShot || {}; const index = shot.questionIndex || 0;
     if (room.phase !== 'rapid-shot') throw new Error('Rapid shot is not active.');
     if (shot.submitted?.[playerId]) throw new Error('You already answered this question.');
-    const userAns = answer.trim().toLowerCase();
-    const expected = RAPID_QUESTIONS[index]?.answer?.trim().toLowerCase();
-    let correct = userAns === expected;
-    if (!correct && RAPID_QUESTIONS[index]?.id === 'q2') {
-      correct = userAns === '5' || userAns === 'five' || userAns === 'lima';
-    }
+    const question = RAPID_QUESTIONS[index];
+    const correct = Number(choiceIndex) === question?.answerIndex;
     const score = (shot.scores?.[playerId] || 0) + (correct ? 1 : 0);
-    transaction.update(ref, { [`rapidShot.answers.${playerId}`]: answer.trim(), [`rapidShot.scores.${playerId}`]: score, [`rapidShot.submitted.${playerId}`]: true, updatedAt: serverTimestamp() });
+    transaction.update(ref, {
+      [`rapidShot.answers.${playerId}`]: Number(choiceIndex),
+      [`rapidShot.scores.${playerId}`]: score,
+      [`rapidShot.submitted.${playerId}`]: true,
+      updatedAt: serverTimestamp(),
+    });
   });
 }
 

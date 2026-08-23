@@ -4,9 +4,9 @@ import boardTiles from '../data/boardTiles.json';
 export const MAX_PLAYERS = 6;
 export const BOARD_LENGTH = boardTiles.length;
 export const RAPID_QUESTIONS = [
-  { id: 'q1', text: 'What is the first month in the Islamic calendar?', answer: 'Muharram' },
-  { id: 'q2', text: 'How many obligatory prayers are there each day?', answer: '5' },
-  { id: 'q3', text: 'What is the name of the month in which Muslims fast?', answer: 'Ramadan' },
+  { id: 'q1', text: 'What is the first month in the Islamic calendar?', choices: ['Muharram', 'Safar', 'Rajab', 'Ramadan'], answerIndex: 0 },
+  { id: 'q2', text: 'How many obligatory prayers are there each day?', choices: ['3', '4', '5', '7'], answerIndex: 2 },
+  { id: 'q3', text: 'What is the name of the month in which Muslims fast?', choices: ['Shawwal', 'Ramadan', 'Dhu al-Hijjah', "Sha'ban"], answerIndex: 1 },
 ];
 export function rollDice(sides = 6) { return Math.floor(Math.random() * sides) + 1; }
 export function shuffleArray(array) { const shuffled = [...array]; for (let i = shuffled.length - 1; i > 0; i -= 1) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } return shuffled; }

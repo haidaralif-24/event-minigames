@@ -33,10 +33,17 @@ export default function MultiplayerPlay() {
   const challengeQuestion = challengeContent.questions.find((question) => question.id === room.challenge?.questionId);
   const rankings = getRankings(room, players);
   const placements = room.winner ? [room.winner, ...rankings.filter((id) => id !== room.winner)].slice(0, 3) : rankings.slice(0, 3);
-  const sendRapid = async () => {
-    if (!answer.trim() || submitted) return;
+  const sendRapid = async (choiceIndex) => {
+    if (submitted) return;
     setBusy(true);
-    try { await submitRapidAnswer(session.roomCode, session.playerId, answer); setAnswer(''); setMessage('Answer locked.'); } catch (submitError) { setMessage(submitError.message || 'Could not submit.'); } finally { setBusy(false); }
+    try {
+      await submitRapidAnswer(session.roomCode, session.playerId, choiceIndex);
+      setMessage('Answer locked.');
+    } catch (submitError) {
+      setMessage(submitError.message || 'Could not submit.');
+    } finally {
+      setBusy(false);
+    }
   };
   const roll = async (value) => {
     setBusy(true);
@@ -52,7 +59,31 @@ export default function MultiplayerPlay() {
     <main className="mx-auto max-w-2xl space-y-4">
       <section className="rounded-3xl border-4 border-[#18233f] bg-white p-5"><div className="flex items-center justify-between"><h2 className="text-xl font-black">Players</h2><b>{Object.values(players).filter((player) => player.connected !== false).length}/6</b></div>{Object.values(players).sort((a, b) => a.id.localeCompare(b.id)).map((player, index) => <div key={player.id} className="mt-2 flex items-center justify-between rounded-xl bg-slate-50 p-3"><b style={{ color: TOKEN_COLORS[index % TOKEN_COLORS.length] }}>{player.name}</b><span className="text-sm font-bold text-slate-400">{player.id === activeId ? 'YOUR TURN' : player.connected ? 'READY' : 'OFFLINE'}</span></div>)}</section>
       {room.phase === 'lobby' && <section className="rounded-3xl border-4 border-[#18233f] bg-white p-8 text-center"><div className="text-5xl">⏳</div><h2 className="mt-3 text-2xl font-black">Waiting for host</h2><p className="mt-2 font-bold text-slate-500">All six players should be logged in before the host starts.</p></section>}
-      {room.phase === 'rapid-shot' && <section className="rounded-3xl border-4 border-[#18233f] bg-white p-7"><p className="text-xs font-black uppercase tracking-widest text-[#ff8c4d]">Rapid Shot {(room.rapidShot?.questionIndex || 0) + 1}/3</p><h2 className="mt-3 text-2xl font-black md:text-3xl">{rapidQuestion?.text}</h2><input disabled={submitted || busy} value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && sendRapid()} placeholder="Type your answer" className="mt-6 w-full rounded-xl border-4 border-[#18233f] p-4 font-bold" /><button disabled={submitted || busy || !answer.trim()} onClick={sendRapid} className="mt-3 w-full rounded-xl border-4 border-[#18233f] bg-[#4dff79] p-4 font-black disabled:opacity-40">{submitted ? 'ANSWER LOCKED' : busy ? 'SUBMITTING…' : 'SUBMIT ANSWER'}</button></section>}
+      {room.phase === 'rapid-shot' && <section className="rounded-3xl border-4 border-[#18233f] bg-white p-7 text-center">
+        <p className="text-xs font-black uppercase tracking-widest text-[#ff8c4d]">Rapid Shot {(room.rapidShot?.questionIndex || 0) + 1}/3</p>
+        <h2 className="mt-3 text-2xl font-black md:text-3xl">{rapidQuestion?.text}</h2>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          {rapidQuestion?.choices?.map((choice, index) => {
+            const isSelected = submitted && room.rapidShot?.answers?.[session.playerId] === index;
+            return <button
+              key={choice}
+              disabled={submitted || busy}
+              onClick={() => sendRapid(index)}
+              className={`rounded-2xl border-4 border-[#18233f] p-4 text-base font-black shadow-md transition-all ${
+                isSelected
+                  ? 'bg-[#4dff79] text-[#18233f]'
+                  : 'bg-[#fff8e7] text-[#18233f] hover:bg-[#ffea4d] active:scale-95'
+              } disabled:opacity-50`}
+            >
+              <span className="mr-2 inline-block rounded-lg bg-[#18233f] px-2 py-0.5 text-xs text-white">
+                {['A', 'B', 'C', 'D'][index]}
+              </span>
+              {choice}
+            </button>;
+          })}
+        </div>
+        {submitted && <p className="mt-4 font-black text-[#22c55e]">✓ Answer locked. Waiting for other players…</p>}
+      </section>}
       {room.phase === 'order-reveal' && <section className="rounded-3xl border-4 border-[#18233f] bg-white p-7"><h2 className="text-3xl font-black">Starting Order</h2>{room.turnOrder.map((id, index) => <div key={id} className={`mt-2 flex justify-between rounded-xl p-3 ${id === session.playerId ? 'bg-[#4dff79]/30' : ''}`}><span>#{index + 1} {players[id]?.name}</span><b>{room.rapidShot?.scores?.[id] || 0}</b></div>)}</section>}
       {room.phase === 'board' && <section className="rounded-3xl border-4 border-[#18233f] bg-white p-8 text-center"><h2 className="text-3xl font-black">{players[activeId]?.name}'s turn</h2>{activeId === session.playerId ? <><p className="mt-3 font-black text-[#ff8c4d]">ROLL ON YOUR DEVICE</p><div className="mt-5 flex justify-center"><Dice onRoll={roll} /></div></> : <p className="mt-3 font-bold text-slate-500">Watch the projected board.</p>}{room.lastChallenge && <p className={`mt-4 font-black ${room.lastChallenge.correct ? 'text-green-600' : 'text-red-600'}`}>{room.lastChallenge.playerId === session.playerId ? (room.lastChallenge.correct ? 'Challenge cleared: +3 tiles!' : 'Challenge missed: moved back to your checkpoint.') : ''}</p>}</section>}
       {room.phase === 'challenge' && <section className="rounded-3xl border-4 border-[#18233f] bg-white p-7 text-center">{room.challenge?.teamId === session.playerId ? <><p className="text-xs font-black uppercase tracking-widest text-[#4d79ff]">Challenge tile</p><h2 className="mt-3 text-2xl font-black">{challengeQuestion?.prompt}</h2><div className="mt-6 grid gap-3">{challengeQuestion?.choices.map((choice, index) => <button key={choice} disabled={busy} onClick={() => answerChallenge(index)} className="rounded-xl border-4 border-[#18233f] bg-[#fff8e7] p-4 font-black hover:bg-[#ffea4d] disabled:opacity-40">{choice}</button>)}</div></> : <><div className="text-5xl">❓</div><h2 className="mt-3 text-2xl font-black">{players[room.challenge?.teamId]?.name} is facing a challenge</h2><p className="mt-2 font-bold text-slate-500">Watch the projector for the result.</p></>}</section>}
