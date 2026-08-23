@@ -381,7 +381,8 @@ export default function MultiplayerBoard({ boardPositions = {}, players = {} }) 
         </g>;
       })}
 
-      {Object.entries(boardPositions).map(([playerId, rawPosition], tokenIndex) => {
+      {playerIds.map((playerId, tokenIndex) => {
+        const rawPosition = boardPositions[playerId];
         const tileIndex = Math.min(TOTAL_TILES - 1, Math.max(0, Number(rawPosition) || 0));
         const playerIndex = Math.max(0, playerIds.indexOf(playerId));
         const player = players[playerId] || {};
@@ -407,6 +408,24 @@ export default function MultiplayerBoard({ boardPositions = {}, players = {} }) 
     <div className="pointer-events-none absolute left-5 top-5 rounded-2xl border-4 border-[#18233f] bg-[#fff8e7]/95 px-4 py-3 shadow-[0_4px_0_#18233f]">
       <p className="text-[10px] font-black uppercase tracking-widest text-[#ff8c4d]">Adventure Island</p>
       <p className="font-display text-lg text-[#18233f]">67 tiles · 6 players</p>
+    </div>
+    <div className="pointer-events-none absolute right-5 top-5 flex flex-col gap-1.5 rounded-2xl border-4 border-[#18233f] bg-[#fff8e7]/95 p-3 shadow-[0_4px_0_#18233f]">
+      {playerIds.map((playerId, index) => {
+        const player = players[playerId] || {};
+        const rawPosition = boardPositions[playerId];
+        const tile = Math.min(TOTAL_TILES - 1, Math.max(0, Number(rawPosition) || 0)) + 1;
+        return (
+          <div key={playerId} className="flex items-center gap-2">
+            {player.avatar ? (
+              <img src={player.avatar} alt={player.name} className="h-8 w-8 rounded-full border-2 border-[#18233f] object-cover" />
+            ) : (
+              <span className="grid h-8 w-8 place-items-center rounded-full border-2 border-[#18233f] text-xs font-black text-white" style={{ backgroundColor: TOKEN_COLORS[index % TOKEN_COLORS.length] }}>{index + 1}</span>
+            )}
+            <span className="text-sm font-black text-[#18233f]">{player.name || `P${index + 1}`}</span>
+            <span className="ml-auto pl-2 text-xs font-extrabold text-[#7a8395]">Tile {tile}</span>
+          </div>
+        );
+      })}
     </div>
   </div>;
 }
