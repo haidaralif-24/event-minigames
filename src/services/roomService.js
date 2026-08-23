@@ -87,9 +87,10 @@ export async function markPlayerDisconnected(_roomCode, playerId) {
 
 export async function resetGame() {
   const snapshot = await getDoc(gameRef());
+  const avatarById = Object.fromEntries(PLAYER_ACCOUNTS.map((account) => [account.playerId, account.avatar]));
   const players = {};
   Object.values(snapshot.exists() ? (snapshot.data().players || {}) : {}).forEach((player) => {
-    players[player.id] = { id: player.id, name: player.name, avatar: player.avatar, username: player.username, connected: false, score: 0, rapidScore: 0, position: 0 };
+    players[player.id] = { id: player.id, name: player.name, avatar: player.avatar || avatarById[player.id] || null, username: player.username, connected: false, score: 0, rapidScore: 0, position: 0 };
   });
   await setDoc(gameRef(), { ...getInitialGameState(), players, hostId: 'host', hostName: HOST_ACCOUNT.name, maxPlayers: MAX_PLAYERS, resetAt: serverTimestamp(), updatedAt: serverTimestamp() });
 }
