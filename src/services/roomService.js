@@ -96,6 +96,23 @@ export async function resetGame() {
 
 export function getPlayerAccounts() { return PLAYER_ACCOUNTS; }
 
+// Step 1 of a synced roll: mark the active player as "rolling" in Firestore
+// so every connected view (host, spectator board, other players) can render
+// the same live dice animation instead of only the roller seeing it locally.
+export async function beginRoll(playerId) {
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(gameRef());
+    if (!snapshot.exists()) throw new Error('Game is not initialized.');
+    const game = snapshot.data();
+    const activePlayerId = game.turnOrder?.[game.activePlayerIndex ?? 0];
+    if (game.phase !== 'board' || activePlayerId !== playerId) throw new Error('It is not your turn to roll.');
+    if (game.rolling?.playerId) throw new Error('A roll is already in progress.');
+    transaction.update(gameRef(), { rolling: { playerId, startedAt: serverTimestamp() }, lastRoll: null, updatedAt: serverTimestamp() });
+  });
+}
+
+// Step 2: resolve the roll's outcome once the shared animation has played out
+// on the rolling player's device, and clear the "rolling" flag for everyone.
 export async function rollForActivePlayer(playerId, value) {
   const roll = Math.min(6, Math.max(1, Number(value) || 1));
   await runTransaction(db, async (transaction) => {
@@ -103,14 +120,14 @@ export async function rollForActivePlayer(playerId, value) {
     if (!snapshot.exists()) throw new Error('Game is not initialized.');
     const game = snapshot.data();
     const activePlayerId = game.turnOrder?.[game.activePlayerIndex ?? 0];
-    if (game.phase !== 'board' || activePlayerId !== playerId || game.lastRoll?.playerId === playerId) throw new Error('It is not your turn to roll.');
+    if (game.phase !== 'board' || activePlayerId !== playerId) throw new Error('It is not your turn to roll.');
 
     const initialPosition = game.boardPositions?.[playerId] || 0;
     const landedPosition = Math.min(boardTiles.length - 1, initialPosition + roll);
     const landedTile = boardTiles[landedPosition];
     const boardPositions = { ...(game.boardPositions || {}), [playerId]: landedPosition };
     const playerCheckpoints = { ...(game.playerCheckpoints || {}) };
-    const base = { boardPositions, playerCheckpoints, lastRoll: { value: roll, playerId, landedPosition }, updatedAt: serverTimestamp() };
+    const base = { boardPositions, playerCheckpoints, rolling: null, lastRoll: { value: roll, playerId, landedPosition }, updatedAt: serverTimestamp() };
 
     if (landedTile?.type === 'challenge') {
       const questionIndex = (landedPosition + (game.round || 0) + playerId.length) % challengeContent.questions.length;

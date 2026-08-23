@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import Dice from '../components/Dice.jsx';
 import { useRoom } from '../hooks/useRoom.js';
-import { markPlayerConnected, markPlayerDisconnected, rollForActivePlayer, submitChallengeChoice, submitRapidAnswer } from '../services/roomService.js';
+import { beginRoll, markPlayerConnected, markPlayerDisconnected, rollForActivePlayer, submitChallengeChoice, submitRapidAnswer } from '../services/roomService.js';
+
+// Keep in sync with the animation feel in Dice.jsx — this is how long the
+// dice visibly rolls for everyone (host, board, other players) before the
+// real outcome resolves.
+const ROLL_ANIMATION_MS = 1100;
 import { RAPID_QUESTIONS, getActivePlayerId, getRankings } from '../services/gameLogic.js';
 import { TOKEN_COLORS, ACTIVE_META } from '../data/constants.js';
 import challengeContent from '../content/maulid-nabi/challenge.json';
@@ -83,11 +88,21 @@ export default function MultiplayerPlay() {
     catch (submitError) { setMessage(submitError.message || 'Could not submit.'); }
     finally { setBusy(false); }
   };
-  const roll = async (value) => {
+  const roll = async () => {
+    if (busy) return;
     setBusy(true); setMessage('');
-    try { await rollForActivePlayer(session.playerId, value); }
-    catch (rollError) { setMessage(rollError.message || 'Could not roll.'); }
-    finally { setBusy(false); }
+    try {
+      await beginRoll(session.playerId);
+      const finalValue = Math.floor(Math.random() * 6) + 1;
+      setTimeout(async () => {
+        try { await rollForActivePlayer(session.playerId, finalValue); }
+        catch (rollError) { setMessage(rollError.message || 'Could not roll.'); }
+        finally { setBusy(false); }
+      }, ROLL_ANIMATION_MS);
+    } catch (rollError) {
+      setMessage(rollError.message || 'Could not roll.');
+      setBusy(false);
+    }
   };
   const answerChallenge = async (choiceIndex) => {
     setBusy(true); setMessage('');
@@ -130,7 +145,7 @@ export default function MultiplayerPlay() {
     {room.phase === 'board' && <section className="mx-auto max-w-4xl text-center">
       <PhaseLabel step="BOARD">{activeId === session.playerId ? 'Your turn' : 'Watch the board'}</PhaseLabel>
       <div className="rounded-3xl bg-white px-10 py-12 shadow-xl ring-1 ring-black/5">
-        {activeId === session.playerId ? <><div className="mx-auto grid h-24 w-24 place-items-center rounded-3xl bg-[#ff8c4d] text-5xl shadow-lg">🎲</div><h1 className="mt-6 text-5xl font-black">Your turn!</h1><p className="mt-3 text-lg font-bold text-[#737887]">Roll the dice to move on the projected board.</p><div className="mt-8 flex justify-center"><Dice onRoll={roll} /></div></> : <><div className="text-7xl">👀</div>{players[activeId]?.avatar && <img src={players[activeId].avatar} alt={players[activeId].name} className="mx-auto mt-4 h-20 w-20 rounded-full border-4 border-[#18233f] object-cover" />}<h1 className="mt-6 text-5xl font-black">{players[activeId]?.name}'s turn</h1><p className="mt-3 text-lg font-bold text-[#737887]">Watch the projected board. Your turn is coming up!</p></>}
+        {activeId === session.playerId ? <><div className="mx-auto grid h-24 w-24 place-items-center rounded-3xl bg-[#ff8c4d] text-5xl shadow-lg">🎲</div><h1 className="mt-6 text-5xl font-black">Your turn!</h1><p className="mt-3 text-lg font-bold text-[#737887]">Roll the dice to move on the projected board.</p><div className="mt-8 flex justify-center"><Dice rolling={Boolean(room.rolling?.playerId === session.playerId)} value={room.lastRoll?.value} onRollStart={roll} disabled={busy} /></div></> : <><div className="text-7xl">👀</div>{players[activeId]?.avatar && <img src={players[activeId].avatar} alt={players[activeId].name} className="mx-auto mt-4 h-20 w-20 rounded-full border-4 border-[#18233f] object-cover" />}<h1 className="mt-6 text-5xl font-black">{players[activeId]?.name}'s turn</h1><p className="mt-3 text-lg font-bold text-[#737887]">Watch the projected board. Your turn is coming up!</p><div className="mt-8 flex justify-center"><Dice rolling={Boolean(room.rolling?.playerId === activeId)} value={room.lastRoll?.value} /></div></>}
         {room.lastChallenge?.playerId === session.playerId && <p className={`mt-6 rounded-2xl p-4 font-black ${room.lastChallenge.correct ? 'bg-[#dff8e7] text-[#218548]' : 'bg-[#fde4e4] text-[#c43838]'}`}>{room.lastChallenge.correct ? '🎉 Challenge cleared: +3 tiles!' : '❌ Challenge missed: moved back to your checkpoint.'}</p>}
       </div>
     </section>}

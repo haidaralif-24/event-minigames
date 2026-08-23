@@ -139,116 +139,130 @@ function Dock({ x, y }) {
 function TeamAvatar({ playerIndex, color, playerName, avatar }) {
   const index = playerIndex % 6;
   const clipId = `avatar-clip-${index}`;
+  // NOTE: the avatar <image> and its clipPath are deliberately kept OUTSIDE
+  // the filter="url(#softShadow)" group below. Chromium/Safari have a known
+  // bug where an SVG filter on an ancestor of a clip-path'd raster <image>
+  // silently drops the clipped content — that was why avatars weren't
+  // rendering on the board. Everything else (badge, shadow, stickman
+  // fallback) can safely stay filtered; only the avatar bitmap needs to sit
+  // outside that subtree.
   return (
-    <g filter="url(#softShadow)" className="select-none pointer-events-none">
-      {/* Ground shadow */}
-      <ellipse cy="18" rx="15" ry="5" fill={INK} opacity=".25" />
+    <g className="select-none pointer-events-none">
+      <g filter="url(#softShadow)">
+        {/* Ground shadow */}
+        <ellipse cy="18" rx="15" ry="5" fill={INK} opacity=".25" />
 
-      {/* Floating Team Badge above avatar */}
-      <g transform="translate(0, -42)">
-        <rect
-          x="-25"
-          y="-11"
-          width="50"
-          height="19"
-          rx="9.5"
-          fill="#fffdf5"
-          stroke="#18233f"
-          strokeWidth="2.5"
-        />
-        <rect
-          x="-23"
-          y="-9"
-          width="15"
-          height="15"
-          rx="7.5"
-          fill={color}
-        />
-        <text
-          x="-15.5"
-          y="2"
-          textAnchor="middle"
-          fontSize="9.5"
-          fontWeight="900"
-          fill="#fff"
-          fontFamily="Nunito, sans-serif"
-        >
-          {index + 1}
-        </text>
-        <text
-          x="8"
-          y="2.5"
-          textAnchor="middle"
-          fontSize="9"
-          fontWeight="900"
-          fill="#18233f"
-          fontFamily="Nunito, sans-serif"
-        >
-          {playerName.length > 5 ? playerName.slice(0, 4) + '…' : playerName}
-        </text>
+        {/* Floating Team Badge above avatar */}
+        <g transform="translate(0, -42)">
+          <rect
+            x="-25"
+            y="-11"
+            width="50"
+            height="19"
+            rx="9.5"
+            fill="#fffdf5"
+            stroke="#18233f"
+            strokeWidth="2.5"
+          />
+          <rect
+            x="-23"
+            y="-9"
+            width="15"
+            height="15"
+            rx="7.5"
+            fill={color}
+          />
+          <text
+            x="-15.5"
+            y="2"
+            textAnchor="middle"
+            fontSize="9.5"
+            fontWeight="900"
+            fill="#fff"
+            fontFamily="Nunito, sans-serif"
+          >
+            {index + 1}
+          </text>
+          <text
+            x="8"
+            y="2.5"
+            textAnchor="middle"
+            fontSize="9"
+            fontWeight="900"
+            fill="#18233f"
+            fontFamily="Nunito, sans-serif"
+          >
+            {playerName.length > 5 ? playerName.slice(0, 4) + '…' : playerName}
+          </text>
+        </g>
+
+        {avatar ? (
+          <circle cx="0" cy="-8" r="20" fill={color} stroke={INK} strokeWidth="3" />
+        ) : (
+          <>
+            {/* Legs & Shoes */}
+            <path
+              d="M-5 6v10M5 6v10"
+              stroke="#18233f"
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
+            <ellipse cx="-6" cy="16" rx="4" ry="2.5" fill="#18233f" />
+            <ellipse cx="6" cy="16" rx="4" ry="2.5" fill="#18233f" />
+
+            {/* Body / Outfit */}
+            <rect
+              x="-9"
+              y="-3"
+              width="18"
+              height="12"
+              rx="5"
+              fill={color}
+              stroke="#18233f"
+              strokeWidth="3"
+            />
+            {/* Arms */}
+            <path
+              d="M-9 0l-5 6M9 0l5 6"
+              stroke="#18233f"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+            />
+            <circle cx="-14" cy="6" r="2.5" fill="#ffe0bd" stroke="#18233f" strokeWidth="1.5" />
+            <circle cx="14" cy="6" r="2.5" fill="#ffe0bd" stroke="#18233f" strokeWidth="1.5" />
+
+            {/* Head */}
+            <circle
+              cy="-14"
+              r="12"
+              fill="#ffe0bd"
+              stroke="#18233f"
+              strokeWidth="3"
+            />
+          </>
+        )}
       </g>
 
-      {/* Avatar token */}
-      <defs>
-        <clipPath id={clipId}>
-          <circle cx="0" cy="-8" r="20" />
-        </clipPath>
-      </defs>
-      {avatar ? (
+      {/* Avatar bitmap sits outside the filtered group on purpose (see note above). */}
+      {avatar && (
         <>
-          <circle cx="0" cy="-8" r="20" fill={color} stroke={INK} strokeWidth="3" />
-          <image
-            href={avatar}
-            x="-20"
-            y="-28"
-            width="40"
-            height="40"
-            preserveAspectRatio="xMidYMid slice"
-            clipPath={`url(#${clipId})`}
-          />
+          <defs>
+            <clipPath id={clipId}>
+              <circle cx="0" cy="-8" r="20" />
+            </clipPath>
+          </defs>
+          <g clipPath={`url(#${clipId})`}>
+            <image
+              href={avatar}
+              xlinkHref={avatar}
+              x="-20"
+              y="-28"
+              width="40"
+              height="40"
+              preserveAspectRatio="xMidYMid slice"
+            />
+          </g>
           <circle cx="0" cy="-8" r="20" fill="none" stroke={INK} strokeWidth="3" />
-        </>
-      ) : (
-        <>
-          {/* Legs & Shoes */}
-          <path
-            d="M-5 6v10M5 6v10"
-            stroke="#18233f"
-            strokeWidth="4"
-            strokeLinecap="round"
-          />
-          <ellipse cx="-6" cy="16" rx="4" ry="2.5" fill="#18233f" />
-          <ellipse cx="6" cy="16" rx="4" ry="2.5" fill="#18233f" />
-
-          {/* Body / Outfit */}
-          <rect
-            x="-9"
-            y="-3"
-            width="18"
-            height="12"
-            rx="5"
-            fill={color}
-            stroke="#18233f"
-            strokeWidth="3"
-          />
-          {/* Arms */}
-          <path
-            d="M-9 0l-5 6M9 0l5 6"
-            stroke="#18233f"
-            strokeWidth="3.5"
-            strokeLinecap="round"
-          />
-          <circle cx="-14" cy="6" r="2.5" fill="#ffe0bd" stroke="#18233f" strokeWidth="1.5" />
-          <circle cx="14" cy="6" r="2.5" fill="#ffe0bd" stroke="#18233f" strokeWidth="1.5" />
-
-          {/* Head */}
-          <circle
-            cy="-14"
-            r="12"
-            fill="#ffe0bd"
-            stroke="#18233f"
-            strokeWidth="3"
-          />
         </>
       )}
     </g>
