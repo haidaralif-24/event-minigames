@@ -114,11 +114,30 @@ export default function MultiplayerHost() {
   const hasStarted = !['lobby', 'rapid-shot', 'order-reveal'].includes(room.phase);
   const update = (updates) => updateRoom('current', updates);
 
-  const startRapid = () => update({ phase: 'rapid-shot', round: 1, turnOrder: [], activePlayerIndex: 0, boardPositions: Object.fromEntries(activePlayers.map((player) => [player.id, 0])), playerCheckpoints: Object.fromEntries(activePlayers.map((player) => [player.id, 0])), winner: null, rapidShot: { questionIndex: 0, answers: {}, scores: Object.fromEntries(activePlayers.map((player) => [player.id, 0])), submitted: {} } });
+  const startRapid = () => {
+    const active = activePlayers.length > 0 ? activePlayers : sortedPlayers;
+    if (!active.length) return;
+    update({
+      phase: 'rapid-shot',
+      round: 1,
+      turnOrder: [],
+      activePlayerIndex: 0,
+      boardPositions: Object.fromEntries(active.map((player) => [player.id, 0])),
+      playerCheckpoints: Object.fromEntries(active.map((player) => [player.id, 0])),
+      winner: null,
+      rapidShot: {
+        questionIndex: 0,
+        answers: {},
+        scores: Object.fromEntries(active.map((player) => [player.id, 0])),
+        submitted: {},
+      },
+    });
+  };
   const advanceRapid = async () => {
     const questionIndex = room.rapidShot?.questionIndex || 0;
     if (questionIndex < RAPID_QUESTIONS.length - 1) return update({ 'rapidShot.questionIndex': questionIndex + 1, 'rapidShot.answers': {}, 'rapidShot.submitted': {} });
-    return update({ phase: 'order-reveal', turnOrder: resolveRapidShotOrder(players, room.rapidShot?.scores || {}), activePlayerIndex: 0, round: 1 });
+    const activeMap = Object.fromEntries(activePlayers.map((p) => [p.id, p]));
+    return update({ phase: 'order-reveal', turnOrder: resolveRapidShotOrder(activeMap, room.rapidShot?.scores || {}), activePlayerIndex: 0, round: 1 });
   };
   const beginBoard = () => update({ phase: 'board', round: room.round || 1, activePlayerIndex: 0, lastRoll: null });
   const roll = async (value) => {
@@ -176,7 +195,7 @@ export default function MultiplayerHost() {
         <section className="mb-4 rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]"><h2 className="mb-2 font-display text-base">Leaderboard</h2><Leaderboard rankings={hasStarted ? rankings : []} players={players} boardPositions={room.boardPositions} /></section>
 
         <section className="rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]">
-          {room.phase === 'lobby' && <><p className="mb-3 text-center text-[11.5px] font-extrabold text-[#7a8395]">Waiting for all 7 fixed player accounts to log in.</p><button disabled={activePlayers.length !== 7} onClick={startRapid} className="w-full rounded-xl bg-[#45f27b] px-4 py-3 font-display text-[13px] shadow-[0_4px_0_rgba(0,0,0,.18)] disabled:bg-[#e4dfc9] disabled:text-[#a39c85] disabled:shadow-none">Start 3 Rapid Shots</button></>}
+          {room.phase === 'lobby' && <><p className="mb-3 text-center text-[11.5px] font-extrabold text-[#7a8395]">{activePlayers.length === 0 ? 'Waiting for player accounts to log in.' : `${activePlayers.length} player${activePlayers.length > 1 ? 's' : ''} connected.`}</p><button disabled={activePlayers.length === 0} onClick={startRapid} className="w-full rounded-xl bg-[#45f27b] px-4 py-3 font-display text-[13px] shadow-[0_4px_0_rgba(0,0,0,.18)] disabled:bg-[#e4dfc9] disabled:text-[#a39c85] disabled:shadow-none">Start 3 Rapid Shots {activePlayers.length > 0 ? `(${activePlayers.length} Player${activePlayers.length > 1 ? 's' : ''})` : ''}</button></>}
           {room.phase === 'rapid-shot' && <><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#ff8c4d]">Rapid Shot {(room.rapidShot?.questionIndex || 0) + 1}/3</p><h2 className="my-2 font-display text-lg">{RAPID_QUESTIONS[room.rapidShot?.questionIndex || 0]?.text}</h2><p className="mb-3 text-xs font-extrabold text-[#7a8395]">Submitted {Object.keys(room.rapidShot?.submitted || {}).length}/{activePlayers.length}</p><button onClick={advanceRapid} className="w-full rounded-xl bg-[#4d79ff] px-4 py-3 font-display text-[13px] text-white shadow-[0_4px_0_rgba(0,0,0,.18)]">{room.rapidShot?.questionIndex === 2 ? 'Calculate Starting Order' : 'Next Question'}</button></>}
           {room.phase === 'order-reveal' && <><h2 className="mb-3 font-display text-lg">Starting Order</h2>{room.turnOrder.map((id, index) => <div key={id} className="flex justify-between border-b border-[#18233f]/10 py-2 text-sm font-bold"><span>#{index + 1} {players[id]?.name}</span><span>{room.rapidShot?.scores?.[id] || 0}</span></div>)}<button onClick={beginBoard} className="mt-4 w-full rounded-xl bg-[#45f27b] px-4 py-3 font-display text-[13px] shadow-[0_4px_0_rgba(0,0,0,.18)]">Start Board</button></>}
           {room.phase === 'board' && <><div className="mb-3 flex justify-center"><Dice onRoll={roll} /></div><button onClick={nextTurn} disabled={!room.lastRoll || rollBusy} className="w-full rounded-xl bg-[#45f27b] px-4 py-3 font-display text-[13px] shadow-[0_4px_0_rgba(0,0,0,.18)] disabled:opacity-40">Next Player →</button></>}

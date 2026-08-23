@@ -14,8 +14,9 @@ function saveSession(session) { localStorage.setItem(SESSION_KEY, JSON.stringify
 export function clearSession() { localStorage.removeItem(SESSION_KEY); }
 
 export function getAccount(username, password) {
-  const clean = username.trim().toLowerCase();
-  return ALL_ACCOUNTS.find((account) => account.username.toLowerCase() === clean && account.password === password) || null;
+  const cleanUser = username.trim().toLowerCase();
+  const cleanPass = password.trim().toLowerCase();
+  return ALL_ACCOUNTS.find((account) => account.username.toLowerCase() === cleanUser && account.password.toLowerCase() === cleanPass) || null;
 }
 
 export async function login(username, password) {
@@ -28,7 +29,6 @@ export async function login(username, password) {
     const players = { ...(current.players || {}) };
     if (account.role === 'player') {
       const existing = players[account.playerId];
-      if (existing?.connected) throw new Error('This player is already connected on another device.');
       players[account.playerId] = {
         id: account.playerId,
         name: account.name,
@@ -59,13 +59,22 @@ export async function submitRapidAnswer(_roomCode, playerId, answer) {
     if (!snapshot.exists()) throw new Error('Game is not initialized.');
     const room = snapshot.data(); const shot = room.rapidShot || {}; const index = shot.questionIndex || 0;
     if (room.phase !== 'rapid-shot') throw new Error('Rapid shot is not active.');
-    if (!room.players?.[playerId]?.connected) throw new Error('Player is not connected.');
     if (shot.submitted?.[playerId]) throw new Error('You already answered this question.');
+    const userAns = answer.trim().toLowerCase();
     const expected = RAPID_QUESTIONS[index]?.answer?.trim().toLowerCase();
-    const correct = answer.trim().toLowerCase() === expected;
+    let correct = userAns === expected;
+    if (!correct && RAPID_QUESTIONS[index]?.id === 'q2') {
+      correct = userAns === '5' || userAns === 'five' || userAns === 'lima';
+    }
     const score = (shot.scores?.[playerId] || 0) + (correct ? 1 : 0);
     transaction.update(ref, { [`rapidShot.answers.${playerId}`]: answer.trim(), [`rapidShot.scores.${playerId}`]: score, [`rapidShot.submitted.${playerId}`]: true, updatedAt: serverTimestamp() });
   });
+}
+
+export async function markPlayerConnected(_roomCode, playerId) {
+  const snapshot = await getDoc(gameRef());
+  if (!snapshot.exists() || !snapshot.data().players?.[playerId]) return;
+  await updateDoc(gameRef(), { [`players.${playerId}.connected`]: true, [`players.${playerId}.lastSeenAt`]: serverTimestamp(), updatedAt: serverTimestamp() });
 }
 
 export async function markPlayerDisconnected(_roomCode, playerId) {

@@ -200,8 +200,9 @@ export default function MultiplayerBoard({ boardPositions = {}, players = {} }) 
     const path = trailGeometryRef.current;
     if (!path) return;
     const totalLength = path.getTotalLength();
-    const samples = Array.from({ length: Math.ceil(totalLength / 2) + 1 }, (_, index, array) => {
-      const length = (index / (array.length - 1)) * totalLength;
+    const sampleCount = Math.max(1, Math.ceil(totalLength / 2));
+    const samples = Array.from({ length: sampleCount + 1 }, (_, index) => {
+      const length = (index / sampleCount) * totalLength;
       const point = path.getPointAtLength(length);
       return { length, x: point.x, y: point.y };
     });

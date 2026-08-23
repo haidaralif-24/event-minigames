@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Dice from '../components/Dice.jsx';
 import { useRoom } from '../hooks/useRoom.js';
-import { markPlayerDisconnected, rollForActivePlayer, submitChallengeChoice, submitRapidAnswer } from '../services/roomService.js';
+import { markPlayerConnected, markPlayerDisconnected, rollForActivePlayer, submitChallengeChoice, submitRapidAnswer } from '../services/roomService.js';
 import { RAPID_QUESTIONS, getActivePlayerId, getRankings } from '../services/gameLogic.js';
 import { TOKEN_COLORS, ACTIVE_META } from '../data/constants.js';
 import challengeContent from '../content/maulid-nabi/challenge.json';
@@ -11,8 +11,16 @@ export default function MultiplayerPlay() {
   const [answer, setAnswer] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  useEffect(() => () => {
-    if (session?.roomCode && session?.playerId) markPlayerDisconnected(session.roomCode, session.playerId).catch(() => {});
+
+  useEffect(() => {
+    if (session?.roomCode && session?.playerId) {
+      markPlayerConnected(session.roomCode, session.playerId).catch(() => {});
+    }
+    return () => {
+      if (session?.roomCode && session?.playerId) {
+        markPlayerDisconnected(session.roomCode, session.playerId).catch(() => {});
+      }
+    };
   }, [session?.roomCode, session?.playerId]);
   if (loading) return <div className="grid min-h-screen place-items-center bg-[#fff8e7]">Connecting…</div>;
   if (error || !room) return <div className="grid min-h-screen place-items-center bg-[#fff8e7] text-red-600">Game unavailable.</div>;
