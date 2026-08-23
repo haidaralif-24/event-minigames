@@ -30,7 +30,7 @@ export default function MultiplayerLobby2(){
         {error&&<div className="rounded-xl border-2 border-red-400 bg-red-50 p-3 text-sm font-bold text-red-700">{error}</div>}
         <button disabled={busy||!username.trim()||!password} onClick={submit} className="w-full rounded-xl border-4 border-[#18233f] bg-[#4dff79] py-4 text-lg font-black text-[#18233f] shadow-md disabled:opacity-40">{busy?'LOGGING IN…':'LOGIN'}</button>
       </div>
-      <div className="mt-5 rounded-xl bg-[#fff8e7] p-4 text-center text-xs font-bold text-[#687187]">Single lobby • 1 host • up to 7 players</div>
+      <div className="mt-5 rounded-xl bg-[#fff8e7] p-4 text-center text-xs font-bold text-[#687187]">Single lobby • 1 host • up to 6 players</div>
     </div>
   </div>
 }

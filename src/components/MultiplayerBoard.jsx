@@ -281,7 +281,7 @@ export default function MultiplayerBoard({ boardPositions = {}, players = {} }) 
     </svg>
     <div className="pointer-events-none absolute left-5 top-5 rounded-2xl border-4 border-[#18233f] bg-[#fff8e7]/95 px-4 py-3 shadow-[0_4px_0_#18233f]">
       <p className="text-[10px] font-black uppercase tracking-widest text-[#ff8c4d]">Adventure Island</p>
-      <p className="font-display text-lg text-[#18233f]">67 tiles · 7 players</p>
+      <p className="font-display text-lg text-[#18233f]">67 tiles · 6 players</p>
     </div>
   </div>;
 }

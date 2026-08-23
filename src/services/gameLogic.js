@@ -1,7 +1,7 @@
 import { TILE_TYPES } from '../data/constants.js';
 import boardTiles from '../data/boardTiles.json';
 
-export const MAX_PLAYERS = 7;
+export const MAX_PLAYERS = 6;
 export const BOARD_LENGTH = boardTiles.length;
 export const RAPID_QUESTIONS = [
   { id: 'q1', text: 'What is the first month in the Islamic calendar?', answer: 'Muharram' },
