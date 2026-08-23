@@ -269,46 +269,43 @@ function TeamAvatar({ playerIndex, color, playerName, avatar }) {
   );
 }
 
-function TrailToken({ playerIndex, playerName, color, avatar, offsetX, offsetY, pathRef, tileIndex, tileLengths }) {
-  const trailLength = useMotionValue(0);
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const [placed, setPlaced] = useState(false);
-  const initialized = useRef(false);
+function TrailToken({ playerIndex, playerName, color, avatar, offsetX, offsetY, points, tileIndex }) {
+  const x = useMotionValue(points[tileIndex].x + offsetX);
+  const y = useMotionValue(points[tileIndex].y - 18 + offsetY);
+  const progress = useMotionValue(0);
   const previousTile = useRef(tileIndex);
+
   useEffect(() => {
-    const path = pathRef.current;
-    const target = tileLengths[tileIndex];
-    if (!path || target === undefined) return undefined;
-    const place = (length, hop = 0) => {
-      const point = path.getPointAtLength(length);
-      x.set(point.x + offsetX);
-      y.set(point.y - 18 + offsetY - hop);
-    };
-    if (!initialized.current) {
-      initialized.current = true;
-      previousTile.current = tileIndex;
-      trailLength.set(target);
-      place(target);
-      setPlaced(true);
-      return undefined;
-    }
-    const from = trailLength.get();
+    const fromPoint = points[previousTile.current];
+    const targetPoint = points[tileIndex];
+    const fromX = fromPoint.x + offsetX;
+    const fromY = fromPoint.y - 18 + offsetY;
+    const targetX = targetPoint.x + offsetX;
+    const targetY = targetPoint.y - 18 + offsetY;
     const distance = Math.max(1, Math.abs(tileIndex - previousTile.current));
     previousTile.current = tileIndex;
-    if (Math.abs(target - from) < 0.5) return undefined;
-    const controls = animate(trailLength, target, {
+
+    progress.set(0);
+    const controls = animate(progress, 1, {
       duration: distance * 0.175,
       ease: [0.34, 1.32, 0.64, 1],
-      onUpdate: (length) => {
-        const progress = Math.min(1, Math.abs(length - from) / Math.abs(target - from));
-        place(length, Math.abs(Math.sin(progress * Math.PI * distance)) * 26);
+      onUpdate: () => {
+        const p = progress.get();
+        const hop = Math.abs(Math.sin(p * Math.PI * distance)) * 26;
+        const currentX = fromX + (targetX - fromX) * p;
+        const currentY = fromY + (targetY - fromY) * p - hop;
+        x.set(currentX);
+        y.set(currentY);
       },
-      onComplete: () => place(target),
+      onComplete: () => {
+        x.set(targetX);
+        y.set(targetY);
+      },
     });
     return () => controls.stop();
-  }, [offsetX, offsetY, pathRef, tileIndex, tileLengths, trailLength, x, y]);
-  return <motion.g style={{ x, y, opacity: placed ? 1 : 0 }}><TeamAvatar playerIndex={playerIndex} color={color} playerName={playerName} avatar={avatar} /></motion.g>;
+  }, [tileIndex, points, offsetX, offsetY, progress, x, y]);
+
+  return <motion.g style={{ x, y, opacity: 1 }}><TeamAvatar playerIndex={playerIndex} color={color} playerName={playerName} avatar={avatar} /></motion.g>;
 }
 
 export default function MultiplayerBoard({ boardPositions = {}, players = {} }) {
@@ -317,24 +314,6 @@ export default function MultiplayerBoard({ boardPositions = {}, players = {} }) 
   const sandPath = useMemo(() => smoothBlob(blobPoints(600, 26, 0.4)), []);
   const grassPath = useMemo(() => smoothBlob(blobPoints(530, 26, 1.1)), []);
   const playerIds = Object.keys(players).sort();
-  const trailGeometryRef = useRef(null);
-  const [tileLengths, setTileLengths] = useState({});
-
-  useEffect(() => {
-    const path = trailGeometryRef.current;
-    if (!path) return;
-    const totalLength = path.getTotalLength();
-    const sampleCount = Math.max(1, Math.ceil(totalLength / 2));
-    const samples = Array.from({ length: sampleCount + 1 }, (_, index) => {
-      const length = (index / sampleCount) * totalLength;
-      const point = path.getPointAtLength(length);
-      return { length, x: point.x, y: point.y };
-    });
-    setTileLengths(Object.fromEntries(points.map((point, index) => {
-      const closest = samples.reduce((best, sample) => ((sample.x - point.x) ** 2 + (sample.y - point.y) ** 2 < (best.x - point.x) ** 2 + (best.y - point.y) ** 2 ? sample : best));
-      return [index, closest.length];
-    })));
-  }, [points, trailPath]);
 
   return <div className="relative w-full overflow-hidden rounded-[2rem] border-4 border-[#18233f] bg-[#2c8fae] shadow-2xl" style={{ height: 'clamp(620px, 92vh, 980px)' }}>
     <svg className="h-full w-full" viewBox={`${-MAP_PADDING} ${-MAP_PADDING} ${MAP_WIDTH + MAP_PADDING * 2} ${MAP_HEIGHT + MAP_PADDING * 2}`} preserveAspectRatio="xMidYMid slice" role="img" aria-label="Adventure Island board map">
@@ -361,7 +340,6 @@ export default function MultiplayerBoard({ boardPositions = {}, players = {} }) 
       <path d={trailPath} fill="none" stroke="#8b6b38" strokeWidth="30" strokeLinecap="round" opacity=".28" />
       <path d={trailPath} fill="none" stroke="url(#mp-trail)" strokeWidth="22" strokeLinecap="round" />
       <path d={trailPath} fill="none" stroke="#fff6df" strokeWidth="5" strokeLinecap="round" strokeDasharray="1 20" opacity=".85" />
-      <path ref={trailGeometryRef} d={trailPath} fill="none" stroke="none" visibility="hidden" />
 
       <g transform={`translate(${CX} ${CY})`} filter="url(#softShadow)">
         <circle r="92" fill="url(#mp-peak)" stroke="#5a3a20" strokeWidth="6" />
@@ -412,9 +390,8 @@ export default function MultiplayerBoard({ boardPositions = {}, players = {} }) 
             color={TOKEN_COLORS[playerIndex % TOKEN_COLORS.length]}
             offsetX={offsetX}
             offsetY={offsetY}
-            pathRef={trailGeometryRef}
+            points={points}
             tileIndex={tileIndex}
-            tileLengths={tileLengths}
           />
         );
       })}
