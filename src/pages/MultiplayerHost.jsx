@@ -192,7 +192,7 @@ export default function MultiplayerHost() {
     }
   };
 
-  return <div className="min-h-screen bg-[#0e1a3a] px-5 py-7 text-white md:px-7 md:pb-10">
+  return <div className="h-screen overflow-y-auto bg-[#0e1a3a] px-5 py-7 text-white md:px-7 md:pb-10">
     <header className="mx-auto mb-5 flex max-w-[1520px] flex-wrap items-start justify-between gap-4">
       <div><p className="mb-1 text-[11px] font-black uppercase tracking-[.22em] text-[#ff8c4d]">{ACTIVE_META.title}</p><h1 className="font-display text-4xl md:text-[38px]">Projected Host / Spectator</h1><p className="mt-1.5 text-[13px] font-bold text-[#aab2d4]">Single lobby · Host account: {session.username}</p></div>
       <div className="flex items-center gap-2.5"><PhaseBadge phase={room.phase} round={room.round} /><button onClick={toggleFullscreen} className="rounded-xl border-2 border-white/15 bg-[#132352] px-4 py-3 font-display text-[13px] text-white">{isFullscreen ? 'Exit Fullscreen' : 'Present Fullscreen'}</button><button onClick={reset} disabled={resetBusy} className="rounded-xl bg-[#ff8c4d] px-5 py-3 font-display text-[13px] text-[#18233f] shadow-[0_4px_0_rgba(0,0,0,.25)] disabled:opacity-50">{resetBusy ? 'Resetting…' : 'Reset Game'}</button></div>
