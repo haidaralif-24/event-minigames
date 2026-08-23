@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Board from '../components/MultiplayerBoard.jsx';
 import Dice from '../components/Dice.jsx';
 import { useRoom } from '../hooks/useRoom.js';
@@ -192,6 +192,17 @@ export default function MultiplayerHost() {
     }
   };
 
+  const [rapidCountdown, setRapidCountdown] = useState(5);
+  const advanceRapidRef = useRef(advanceRapid);
+  advanceRapidRef.current = advanceRapid;
+  useEffect(() => {
+    if (room.phase !== 'rapid-shot') return undefined;
+    setRapidCountdown(5);
+    const tick = setInterval(() => setRapidCountdown((seconds) => Math.max(0, seconds - 1)), 1000);
+    const advance = setTimeout(() => advanceRapidRef.current(), 5000);
+    return () => { clearInterval(tick); clearTimeout(advance); };
+  }, [room.phase, room.rapidShot?.questionIndex]);
+
   return <div className="h-screen overflow-y-auto bg-[#0e1a3a] px-5 py-7 text-white md:px-7 md:pb-10">
     <header className="mx-auto mb-5 flex max-w-[1520px] flex-wrap items-start justify-between gap-4">
       <div><p className="mb-1 text-[11px] font-black uppercase tracking-[.22em] text-[#ff8c4d]">{ACTIVE_META.title}</p><h1 className="font-display text-4xl md:text-[38px]">Projected Host / Spectator</h1><p className="mt-1.5 text-[13px] font-bold text-[#aab2d4]">Single lobby · Host account: {session.username}</p></div>
@@ -209,7 +220,7 @@ export default function MultiplayerHost() {
 
         <section className="rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]">
           {room.phase === 'lobby' && <><p className="mb-3 text-center text-[11.5px] font-extrabold text-[#7a8395]">{activePlayers.length === 0 ? 'Waiting for player accounts to log in.' : `${activePlayers.length} player${activePlayers.length > 1 ? 's' : ''} connected.`}</p><button disabled={activePlayers.length === 0} onClick={startRapid} className="w-full rounded-xl bg-[#45f27b] px-4 py-3 font-display text-[13px] shadow-[0_4px_0_rgba(0,0,0,.18)] disabled:bg-[#e4dfc9] disabled:text-[#a39c85] disabled:shadow-none">Start 3 Rapid Shots {activePlayers.length > 0 ? `(${activePlayers.length} Player${activePlayers.length > 1 ? 's' : ''})` : ''}</button></>}
-          {room.phase === 'rapid-shot' && <><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#ff8c4d]">Rapid Shot {(room.rapidShot?.questionIndex || 0) + 1}/3</p><h2 className="my-2 font-display text-lg">{RAPID_QUESTIONS[room.rapidShot?.questionIndex || 0]?.text}</h2><div className="my-3 grid grid-cols-2 gap-2">{RAPID_QUESTIONS[room.rapidShot?.questionIndex || 0]?.choices?.map((choice, index) => <div key={choice} className="rounded-xl border-2 border-[#18233f]/10 bg-[#f8f5eb] p-2 text-xs font-bold"><span className="mr-1 font-black text-[#ff8c4d]">{['A', 'B', 'C', 'D'][index]}.</span>{choice}</div>)}</div><p className="mb-3 text-xs font-extrabold text-[#7a8395]">Submitted {Object.keys(room.rapidShot?.submitted || {}).length}/{activePlayers.length}</p><button onClick={advanceRapid} className="w-full rounded-xl bg-[#4d79ff] px-4 py-3 font-display text-[13px] text-white shadow-[0_4px_0_rgba(0,0,0,.18)]">{room.rapidShot?.questionIndex === 2 ? 'Calculate Starting Order' : 'Next Question'}</button></>}
+          {room.phase === 'rapid-shot' && <><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#ff8c4d]">Rapid Shot {(room.rapidShot?.questionIndex || 0) + 1}/3</p><h2 className="my-2 font-display text-lg">{RAPID_QUESTIONS[room.rapidShot?.questionIndex || 0]?.text}</h2><div className="my-3 grid grid-cols-2 gap-2">{RAPID_QUESTIONS[room.rapidShot?.questionIndex || 0]?.choices?.map((choice, index) => <div key={choice} className="rounded-xl border-2 border-[#18233f]/10 bg-[#f8f5eb] p-2 text-xs font-bold"><span className="mr-1 font-black text-[#ff8c4d]">{['A', 'B', 'C', 'D'][index]}.</span>{choice}</div>)}</div><p className="mb-3 text-xs font-extrabold text-[#7a8395]">Submitted {Object.keys(room.rapidShot?.submitted || {}).length}/{activePlayers.length}</p><button onClick={advanceRapid} className="w-full rounded-xl bg-[#4d79ff] px-4 py-3 font-display text-[13px] text-white shadow-[0_4px_0_rgba(0,0,0,.18)]">{room.rapidShot?.questionIndex === 2 ? 'Calculate Starting Order' : 'Next Question'} · {rapidCountdown}s</button></>}
           {room.phase === 'order-reveal' && <><h2 className="mb-3 font-display text-lg">Starting Order</h2>{room.turnOrder.map((id, index) => <div key={id} className="flex justify-between border-b border-[#18233f]/10 py-2 text-sm font-bold"><span>#{index + 1} {players[id]?.name}</span><span>{room.rapidShot?.scores?.[id] || 0}</span></div>)}<button onClick={beginBoard} className="mt-4 w-full rounded-xl bg-[#45f27b] px-4 py-3 font-display text-[13px] shadow-[0_4px_0_rgba(0,0,0,.18)]">Start Board</button></>}
           {room.phase === 'board' && <><div className="mb-3 flex justify-center"><Dice onRoll={roll} /></div><button onClick={nextTurn} disabled={!room.lastRoll || rollBusy} className="w-full rounded-xl bg-[#45f27b] px-4 py-3 font-display text-[13px] shadow-[0_4px_0_rgba(0,0,0,.18)] disabled:opacity-40">Next Player →</button></>}
           {room.phase === 'challenge' && <div className="text-center"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#4d79ff]">Challenge Tile</p><h2 className="mt-2 font-display text-xl">{players[room.challenge?.teamId]?.name}</h2><p className="mt-3 text-sm font-bold text-[#7a8395]">{activeChallenge?.prompt}</p><p className="mt-4 text-xs font-black text-[#ff8c4d]">They answer on their device · Correct +{challengeContent.winTiles}, wrong −{challengeContent.loseTiles} to checkpoint</p></div>}
