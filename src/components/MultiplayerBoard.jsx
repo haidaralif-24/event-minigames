@@ -1,19 +1,36 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { animate, motion, useMotionValue } from 'framer-motion';
 import boardTiles from '../data/boardTiles.json';
 import { TOKEN_COLORS } from '../data/constants.js';
 
-const MAP_WIDTH = 2000;
-const MAP_HEIGHT = 1150;
-const MAP_PADDING = 85;
-const TOTAL_TILES = 67;
-const CX = 1000;
-const CY = 575;
-const ASPECT = 1.55;
+const TOTAL_TILES = boardTiles.length; // 67
+const COLS = 10;
+const TILE_SIZE = 64;
+const GAP = 18;
+const ROWS = Math.ceil(TOTAL_TILES / COLS); // 7
+const STEP = TILE_SIZE + GAP;
+const PAD = 28;
+const GRID_W = COLS * STEP + GAP;
+const GRID_H = ROWS * STEP + GAP;
+const MAP_W = GRID_W + PAD * 2;
+const MAP_H = GRID_H + PAD * 2;
 const INK = '#1a1a2e';
 
+// Single source of truth for tile coordinates. Used for BOTH the tile grid
+// render loop AND token placement, so they can never drift out of sync.
+// Boustrophedon (zigzag) order: row 0 left→right, row 1 right→left, etc.
+// Row 0 sits at the bottom; tile 0 = bottom-left (Start), tile 66 = Finish.
+function tileCenter(index) {
+  const row = Math.floor(index / COLS);
+  const colInRow = index % COLS;
+  const col = row % 2 === 0 ? colInRow : (COLS - 1 - colInRow);
+  const x = PAD + col * STEP + TILE_SIZE / 2;
+  const y = PAD + (ROWS - 1 - row) * STEP + TILE_SIZE / 2;
+  return { x, y };
+}
+
 const tileStyle = {
-  start: { fill: '#4dff79', icon: 'S' },
+  start: { fill: '#4dff79', icon: 'S', light: false },
   finish: { fill: '#ff5555', icon: 'F', light: true },
   normal: { fill: '#fffdf5' },
   bonus: { fill: '#ffea4d', icon: '★' },
@@ -22,118 +39,20 @@ const tileStyle = {
   checkpoint: { fill: '#a64dff', icon: '⌂', light: true },
 };
 
-function buildSpiralPoints() {
-  const maxRadius = 520;
-  const minRadius = 100;
-  const startAngle = 0.35;
-  const turns = 2.2;
-  const pointAt = (progress) => {
-    const radius = minRadius + (maxRadius - minRadius) * (1 - progress) ** 0.82;
-    const angle = startAngle + progress * turns * Math.PI * 2;
-    return {
-      x: CX + radius * Math.cos(angle) * ASPECT,
-      y: CY + radius * Math.sin(angle),
-    };
-  };
-
-  // The raw spiral advances by angle, which makes tiles bunch up near the centre.
-  // Resampling it by accumulated arc length keeps every step visually consistent.
-  const samples = Array.from({ length: 4097 }, (_, index) => pointAt(index / 4096));
-  const lengths = [0];
-  for (let index = 1; index < samples.length; index += 1) {
-    lengths.push(lengths[index - 1] + Math.hypot(samples[index].x - samples[index - 1].x, samples[index].y - samples[index - 1].y));
-  }
-  const totalLength = lengths[lengths.length - 1];
-  let sampleIndex = 1;
-  return Array.from({ length: TOTAL_TILES }, (_, index) => {
-    const targetLength = (index / (TOTAL_TILES - 1)) * totalLength;
-    while (lengths[sampleIndex] < targetLength && sampleIndex < lengths.length - 1) sampleIndex += 1;
-    const previousLength = lengths[sampleIndex - 1];
-    const segmentLength = lengths[sampleIndex] - previousLength || 1;
-    const progress = (targetLength - previousLength) / segmentLength;
-    return {
-      x: samples[sampleIndex - 1].x + (samples[sampleIndex].x - samples[sampleIndex - 1].x) * progress,
-      y: samples[sampleIndex - 1].y + (samples[sampleIndex].y - samples[sampleIndex - 1].y) * progress,
-    };
-  });
-}
-
-function catmullRom(points) {
-  let path = '';
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const p0 = points[index === 0 ? 0 : index - 1];
-    const p1 = points[index];
-    const p2 = points[index + 1];
-    const p3 = points[index + 2 < points.length ? index + 2 : index + 1];
-    if (index === 0) path += `M ${p1.x} ${p1.y} `;
-    path += `C ${p1.x + (p2.x - p0.x) / 6} ${p1.y + (p2.y - p0.y) / 6}, `;
-    path += `${p2.x - (p3.x - p1.x) / 6} ${p2.y - (p3.y - p1.y) / 6}, ${p2.x} ${p2.y} `;
-  }
-  return path;
-}
-
-function blobPoints(radius, count, phase) {
-  return Array.from({ length: count }, (_, index) => {
-    const angle = (index / count) * Math.PI * 2;
-    const jitter = 1 + 0.1 * Math.sin(angle * 3 + phase) + 0.05 * Math.sin(angle * 5 + phase * 1.7);
-    return { x: CX + radius * jitter * Math.cos(angle) * ASPECT, y: CY + radius * jitter * Math.sin(angle) };
-  });
-}
-
-function smoothBlob(points) {
-  const first = points[0];
-  const last = points[points.length - 1];
-  let path = `M ${(first.x + last.x) / 2} ${(first.y + last.y) / 2} `;
-  points.forEach((point, index) => {
-    const next = points[(index + 1) % points.length];
-    path += `Q ${point.x} ${point.y}, ${(point.x + next.x) / 2} ${(point.y + next.y) / 2} `;
-  });
-  return `${path}Z`;
-}
-
-function Palm({ x, y, scale = 1 }) {
-  return <g transform={`translate(${x} ${y}) scale(${scale})`}>
-    <ellipse cy="4" rx="16" ry="5" fill={INK} opacity=".18" />
-    <path d="M0 0C-4-22 2-40-6-58" fill="none" stroke="#8a5a32" strokeWidth="7" strokeLinecap="round" />
-    <g transform="translate(-6 -58)" fill="#4bab4c" stroke={INK} strokeWidth="2.5">
-      <path d="M0 0C-22-6-34-18-38-30C-24-22-10-14 0 0Z" />
-      <path d="M0 0C20-8 30-20 32-34C20-24 8-14 0 0Z" fill="#3f9142" />
-      <path d="M0 0C-14-20-12-34 0-46C10-34 12-20 0 0Z" />
+function TurnArrow({ from, to }) {
+  const mx = (from.x + to.x) / 2;
+  const my = (from.y + to.y) / 2;
+  const angle = Math.atan2(to.y - from.y, to.x - from.x);
+  const len = 12;
+  const spread = Math.PI / 7;
+  const a1 = angle + Math.PI - spread;
+  const a2 = angle + Math.PI + spread;
+  return (
+    <g stroke={INK} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none">
+      <line x1={mx} y1={my} x2={mx - len * Math.cos(a1)} y2={my - len * Math.sin(a1)} />
+      <line x1={mx} y1={my} x2={mx - len * Math.cos(a2)} y2={my - len * Math.sin(a2)} />
     </g>
-  </g>;
-}
-
-function Tree({ x, y, scale = 1 }) {
-  return <g transform={`translate(${x} ${y}) scale(${scale})`}>
-    <ellipse cy="26" rx="15" ry="6" fill={INK} opacity=".18" />
-    <path d="M-4 24h8l-1-30h-6z" fill="#8a5a32" stroke={INK} strokeWidth="2" />
-    <circle cy="-14" r="20" fill="#3f9142" stroke={INK} strokeWidth="3" />
-    <circle cx="-10" cy="-24" r="13" fill="#4bab4c" stroke={INK} strokeWidth="3" />
-    <circle cx="11" cy="-22" r="14" fill="#4bab4c" stroke={INK} strokeWidth="3" />
-  </g>;
-}
-
-function Rock({ x, y, scale = 1 }) {
-  return <g transform={`translate(${x} ${y}) scale(${scale})`}>
-    <ellipse cy="9" rx="17" ry="5" fill={INK} opacity=".16" />
-    <path d="M-14 7L-10-7 0-13 13-6 10 7Z" fill="#9aa79b" stroke={INK} strokeWidth="2.5" />
-  </g>;
-}
-
-function Hut({ x, y, scale = 1 }) {
-  return <g transform={`translate(${x} ${y}) scale(${scale})`}>
-    <ellipse cy="18" rx="24" ry="6" fill={INK} opacity=".18" />
-    <rect x="-14" y="-2" width="28" height="20" fill="#e0c179" stroke={INK} strokeWidth="2.5" />
-    <path d="M-18-2L0-22 18-2Z" fill="#c9673d" stroke={INK} strokeWidth="2.5" />
-  </g>;
-}
-
-function Dock({ x, y }) {
-  return <g transform={`translate(${x} ${y})`}>
-    <rect x="-10" y="-70" width="16" height="110" fill="#8a5a32" stroke={INK} strokeWidth="3" />
-    <path d="M-40 30C-10 50 30 50 55 25C45 45 5 65-40 30Z" fill="#c9673d" stroke={INK} strokeWidth="3" />
-    <path d="M-2-66L52-20-2-8Z" fill="#fff8e7" stroke={INK} strokeWidth="3" />
-  </g>;
+  );
 }
 
 function TeamAvatar({ playerIndex, color, playerName, avatar }) {
@@ -309,69 +228,52 @@ function TrailToken({ playerIndex, playerName, color, avatar, offsetX, offsetY, 
 }
 
 export default function MultiplayerBoard({ boardPositions = {}, players = {} }) {
-  const points = useMemo(buildSpiralPoints, []);
-  const trailPath = useMemo(() => catmullRom(points), [points]);
-  const sandPath = useMemo(() => smoothBlob(blobPoints(600, 26, 0.4)), []);
-  const grassPath = useMemo(() => smoothBlob(blobPoints(530, 26, 1.1)), []);
+  const points = useMemo(() => Array.from({ length: TOTAL_TILES }, (_, index) => tileCenter(index)), []);
+  const trackPath = useMemo(() => points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' '), [points]);
   const playerIds = Object.keys(players).sort();
 
-  return <div className="relative w-full overflow-hidden rounded-[2rem] border-4 border-[#18233f] bg-[#2c8fae] shadow-2xl" style={{ height: 'clamp(620px, 92vh, 980px)' }}>
-    <svg className="h-full w-full" viewBox={`${-MAP_PADDING} ${-MAP_PADDING} ${MAP_WIDTH + MAP_PADDING * 2} ${MAP_HEIGHT + MAP_PADDING * 2}`} preserveAspectRatio="xMidYMid slice" role="img" aria-label="Adventure Island board map">
+  return <div className="relative w-full overflow-hidden rounded-[2rem] border-4 border-[#18233f] shadow-2xl" style={{ aspectRatio: `${MAP_W} / ${MAP_H}`, maxHeight: '80vh', background: '#cfeaf6' }}>
+    <svg className="h-full w-full" viewBox={`0 0 ${MAP_W} ${MAP_H}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Snake board game map">
       <defs>
-        <linearGradient id="mp-ocean" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#3aa8c9" /><stop offset="1" stopColor="#1f7a9c" /></linearGradient>
-        <linearGradient id="mp-sand" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#f2dfa0" /><stop offset="1" stopColor="#e0c179" /></linearGradient>
-        <linearGradient id="mp-grass" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#c7e8a4" /><stop offset="1" stopColor="#8fc85e" /></linearGradient>
-        <linearGradient id="mp-trail" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#f5e2ac" /><stop offset="1" stopColor="#c99a55" /></linearGradient>
-        <radialGradient id="mp-peak" cx=".35" cy=".3" r=".8"><stop stopColor="#c98a5b" /><stop offset="1" stopColor="#8a5a35" /></radialGradient>
+        <linearGradient id="mp-bg" x1="0" y1="0" x2="0" y2="1">
+          <stop stopColor="#bfe6f7" />
+          <stop offset="1" stopColor="#cdeebf" />
+        </linearGradient>
         <filter id="softShadow" x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="6" stdDeviation="4" floodOpacity=".3" /></filter>
       </defs>
-      <rect width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#mp-ocean)" />
-      {[700, 780, 860, 940].map((radius) => <ellipse key={radius} cx={CX} cy={CY} rx={radius * ASPECT} ry={radius} fill="none" stroke="#fff" strokeWidth="2" opacity=".13" />)}
-      <path d={sandPath} fill="url(#mp-sand)" stroke="#8a6a3a" strokeWidth="6" filter="url(#softShadow)" />
-      <path d={grassPath} fill="url(#mp-grass)" stroke="#5f9c3f" strokeWidth="5" />
 
-      <Palm x={279} y={255} scale={1.6} /><Palm x={1708} y={275} scale={1.7} /><Palm x={225} y={855} scale={1.6} /><Palm x={1748} y={835} scale={1.5} />
-      <Palm x={1000} y={145} scale={1.4} /><Palm x={1000} y={1015} scale={1.5} /><Tree x={559} y={185} scale={1.5} /><Tree x={1428} y={205} scale={1.4} />
-      <Tree x={439} y={955} scale={1.4} /><Tree x={1575} y={935} scale={1.6} />
-      <Rock x={760} y={225} scale={1.5} /><Rock x={1281} y={935} scale={1.4} /><Rock x={332} y={555} scale={1.3} /><Rock x={1668} y={555} scale={1.4} />
-      {[[626, 315, '#ffea4d'], [1240, 295, '#ff4da6'], [492, 715, '#ffea4d'], [1481, 715, '#ff4da6'], [866, 955, '#a64dff'], [1134, 175, '#4d79ff']].map(([x, y, color]) => <circle key={`${x}-${y}`} cx={x} cy={y} r="4" fill={color} stroke={INK} strokeWidth="1.5" />)}
-      {points.map((point, index) => boardTiles[index]?.type === 'checkpoint' ? <Hut key={`hut-${index}`} x={point.x} y={point.y - 46} scale={1.3} /> : null)}
+      <rect x="0" y="0" width={MAP_W} height={MAP_H} rx="28" fill="url(#mp-bg)" />
 
-      <path d={trailPath} fill="none" stroke="#8b6b38" strokeWidth="30" strokeLinecap="round" opacity=".28" />
-      <path d={trailPath} fill="none" stroke="url(#mp-trail)" strokeWidth="22" strokeLinecap="round" />
-      <path d={trailPath} fill="none" stroke="#fff6df" strokeWidth="5" strokeLinecap="round" strokeDasharray="1 20" opacity=".85" />
-
-      <g transform={`translate(${CX} ${CY})`} filter="url(#softShadow)">
-        <circle r="92" fill="url(#mp-peak)" stroke="#5a3a20" strokeWidth="6" />
-        <rect x="-28" y="-64" width="56" height="60" fill="#e7ddc8" stroke={INK} strokeWidth="4" />
-        <path d="M-34-64L0-98 34-64Z" fill="#c9673d" stroke={INK} strokeWidth="4" />
-        <rect x="-8" y="-30" width="16" height="26" fill="#5a3a20" stroke={INK} strokeWidth="2.5" />
-        <path d="M0-98v-22" stroke={INK} strokeWidth="3" />
-        <path d="M0-120L26-120 13-107Z" fill="#ff4d4d" stroke={INK} strokeWidth="2.5" />
-      </g>
-
-      <Dock x={points[0].x + 70} y={points[0].y + 30} />
+      {/* Visual track connecting tile centres, drawn under the tiles. */}
+      <path d={trackPath} fill="none" stroke="#cdb48a" strokeWidth="10" strokeLinejoin="round" strokeLinecap="round" opacity=".55" />
 
       {points.map((point, index) => {
         const tile = boardTiles[index] || { type: 'normal' };
         const style = tileStyle[tile.type] || tileStyle.normal;
-        const prominent = tile.type === 'start' || tile.type === 'finish';
-        const size = tile.type === 'finish' ? 82 : prominent ? 44 : 34;
-        return <g key={index} transform={`translate(${point.x} ${point.y})`} filter="url(#softShadow)">
-          {tile.type === 'finish' && <>
-            <circle r="66" fill="#ffe36b" opacity=".34" />
-            <circle r="57" fill="none" stroke="#fff3a6" strokeWidth="6" strokeDasharray="10 8" />
-            <path d="M-37-48L-61-76M37-48L61-76" stroke="#fff3a6" strokeWidth="6" strokeLinecap="round" />
-            <text x="-66" y="-70" textAnchor="middle" fontSize="23" fill="#ffea4d" stroke={INK} strokeWidth="2" paintOrder="stroke" fontFamily="Nunito, sans-serif">★</text>
-            <text x="66" y="-70" textAnchor="middle" fontSize="23" fill="#ffea4d" stroke={INK} strokeWidth="2" paintOrder="stroke" fontFamily="Nunito, sans-serif">★</text>
-          </>}
-          <rect x={-size / 2} y={-size / 2} width={size} height={size} rx={tile.type === 'finish' ? 20 : 10} fill={style.fill} stroke={INK} strokeWidth={tile.type === 'finish' ? 5 : 3.5} />
-          {tile.type === 'finish' ? <>
-            <text y="9" textAnchor="middle" fontSize="31" fontWeight="900" fill="#fff8e7" stroke={INK} strokeWidth="1.5" paintOrder="stroke" fontFamily="Nunito, sans-serif">67</text>
-            <text y="51" textAnchor="middle" fontSize="12" fontWeight="900" fill={INK} fontFamily="Nunito, sans-serif">FINISH</text>
-          </> : <text y="5" textAnchor="middle" fontSize={style.icon ? 16 : 11} fontWeight="900" fill={style.light ? '#fff' : INK} fontFamily="Nunito, sans-serif">{style.icon || index + 1}</text>}
-        </g>;
+        const x = point.x - TILE_SIZE / 2;
+        const y = point.y - TILE_SIZE / 2;
+        const isEndpoint = tile.type === 'start' || tile.type === 'finish';
+        return (
+          <g key={index}>
+            <rect x={x} y={y} width={TILE_SIZE} height={TILE_SIZE} rx={14} fill={style.fill} stroke={INK} strokeWidth={3.5} filter="url(#softShadow)" />
+            {isEndpoint ? (
+              <>
+                <text x={point.x} y={point.y + 6} textAnchor="middle" fontSize="24" fontWeight="900" fill={style.light ? '#fff' : '#1a1a2e'} fontFamily="Nunito, sans-serif">{style.icon}</text>
+                <text x={point.x} y={y + TILE_SIZE + 13} textAnchor="middle" fontSize="10" fontWeight="900" fill={INK} fontFamily="Nunito, sans-serif">{tile.type === 'finish' ? 'FINISH' : 'START'}</text>
+              </>
+            ) : (
+              <text x={point.x} y={point.y + 6} textAnchor="middle" fontSize={style.icon ? 24 : 16} fontWeight="900" fill={style.light ? '#fff' : INK} fontFamily="Nunito, sans-serif">{style.icon || index + 1}</text>
+            )}
+          </g>
+        );
       })}
+
+      {/* Turn-direction chevrons at each row-end where the path reverses. */}
+      {points.slice(0, TOTAL_TILES - 1).map((point, index) => (
+        Math.floor(index / COLS) !== Math.floor((index + 1) / COLS)
+          ? <TurnArrow key={`arrow-${index}`} from={point} to={points[index + 1]} />
+          : null
+      ))}
 
       {playerIds.map((playerId, tokenIndex) => {
         const rawPosition = boardPositions[playerId];
@@ -397,8 +299,8 @@ export default function MultiplayerBoard({ boardPositions = {}, players = {} }) 
       })}
     </svg>
     <div className="pointer-events-none absolute left-5 top-5 rounded-2xl border-4 border-[#18233f] bg-[#fff8e7]/95 px-4 py-3 shadow-[0_4px_0_#18233f]">
-      <p className="text-[10px] font-black uppercase tracking-widest text-[#ff8c4d]">Adventure Island</p>
-      <p className="font-display text-lg text-[#18233f]">67 tiles · 6 players</p>
+      <p className="text-[10px] font-black uppercase tracking-widest text-[#ff8c4d]">Game Board</p>
+      <p className="font-display text-lg text-[#18233f]">{TOTAL_TILES} tiles · 6 players</p>
     </div>
     <div className="pointer-events-none absolute right-5 top-5 flex flex-col gap-1.5 rounded-2xl border-4 border-[#18233f] bg-[#fff8e7]/95 p-3 shadow-[0_4px_0_#18233f]">
       {playerIds.map((playerId, index) => {
