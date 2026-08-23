@@ -3,15 +3,8 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
 
-    // The event currently uses Firebase anonymous authentication plus a fixed
-    // account login screen. These rules are intentionally permissive for the
-    // private event test build. Tighten writes before a public launch.
-    match /gameState/current {
-      allow read, write: if signedIn();
-    }
-
-    match /rooms/{roomId} {
-      allow read, write: if false;
+    match /gameState/{docId} {
+      allow read, write: if true;
     }
 
     match /{document=**} {
