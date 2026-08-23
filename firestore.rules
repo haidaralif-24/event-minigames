@@ -1,8 +1,6 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
-
     match /gameState/{docId} {
       allow read, write: if true;
     }
