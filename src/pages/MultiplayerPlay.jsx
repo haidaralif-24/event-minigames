@@ -54,9 +54,9 @@ export default function MultiplayerPlay() {
     try { await submitChallengeChoice(session.playerId, choiceIndex); } catch (challengeError) { setMessage(challengeError.message || 'Could not answer challenge.'); } finally { setBusy(false); }
   };
 
-  return <div className="min-h-screen bg-[#fff8e7] p-4 text-[#18233f]">
+  return <div className="h-screen overflow-y-auto overscroll-contain bg-[#fff8e7] p-4 text-[#18233f] [scrollbar-gutter:stable]">
     <header className="mx-auto mb-5 max-w-2xl text-center"><p className="text-xs font-black uppercase tracking-[.25em] text-[#ff8c4d]">{ACTIVE_META.title}</p><h1 className="mt-1 font-display text-4xl">{me?.name || session.name}</h1><p className="font-black text-[#4d79ff]">SINGLE LOBBY</p></header>
-    <main className="mx-auto max-w-2xl space-y-4">
+    <main className="mx-auto max-w-2xl space-y-4 pb-8">
       <section className="rounded-3xl border-4 border-[#18233f] bg-white p-5"><div className="flex items-center justify-between"><h2 className="text-xl font-black">Players</h2><b>{Object.values(players).filter((player) => player.connected !== false).length}/6</b></div>{Object.values(players).sort((a, b) => a.id.localeCompare(b.id)).map((player, index) => <div key={player.id} className="mt-2 flex items-center justify-between rounded-xl bg-slate-50 p-3"><b style={{ color: TOKEN_COLORS[index % TOKEN_COLORS.length] }}>{player.name}</b><span className="text-sm font-bold text-slate-400">{player.id === activeId ? 'YOUR TURN' : player.connected ? 'READY' : 'OFFLINE'}</span></div>)}</section>
       {room.phase === 'lobby' && <section className="rounded-3xl border-4 border-[#18233f] bg-white p-8 text-center"><div className="text-5xl">⏳</div><h2 className="mt-3 text-2xl font-black">Waiting for host</h2><p className="mt-2 font-bold text-slate-500">All six players should be logged in before the host starts.</p></section>}
       {room.phase === 'rapid-shot' && <section className="rounded-3xl border-4 border-[#18233f] bg-white p-7 text-center">
