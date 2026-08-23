@@ -98,12 +98,58 @@ export default function MultiplayerHost() {
   const { room, loading, error, session } = useRoom();
   const [resetBusy, setResetBusy] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
+  const [rapidCountdown, setRapidCountdown] = useState(5);
+  const [orderCountdown, setOrderCountdown] = useState(5);
+
+  // These refs let effects below always call the *latest* handler (defined
+  // further down, after the early returns) without needing to restart their
+  // timers every render. All hooks in this component must be declared
+  // unconditionally, above any early return — see the effects' internal
+  // `if (!room) return` guards instead of skipping the hook itself.
+  const advanceRapidRef = useRef(() => {});
+  const beginBoardRef = useRef(() => {});
+  const nextTurnRef = useRef(() => {});
+  const handledRollRef = useRef(null);
+  const autoAdvanceTimeoutRef = useRef(null);
 
   useEffect(() => {
     const syncFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener('fullscreenchange', syncFullscreen);
     return () => document.removeEventListener('fullscreenchange', syncFullscreen);
   }, []);
+
+  useEffect(() => {
+    if (room?.phase !== 'rapid-shot') return undefined;
+    setRapidCountdown(5);
+    const tick = setInterval(() => setRapidCountdown((seconds) => Math.max(0, seconds - 1)), 1000);
+    const advance = setTimeout(() => advanceRapidRef.current(), 5000);
+    return () => { clearInterval(tick); clearTimeout(advance); };
+  }, [room?.phase, room?.rapidShot?.questionIndex]);
+
+  // Auto-advance from the starting-order reveal straight into the board —
+  // host only had to click Start once, this reads the order out loud then
+  // moves on by itself.
+  useEffect(() => {
+    if (room?.phase !== 'order-reveal') return undefined;
+    setOrderCountdown(5);
+    const tick = setInterval(() => setOrderCountdown((seconds) => Math.max(0, seconds - 1)), 1000);
+    const advance = setTimeout(() => beginBoardRef.current(), 5000);
+    return () => { clearInterval(tick); clearTimeout(advance); };
+  }, [room?.phase]);
+
+  // Auto-advance turns on the board once a roll (and any tile effect, e.g. a
+  // challenge) has resolved, so the host never has to click "Next Player".
+  // Keyed off the resolved roll so it only fires once per turn, even across
+  // a detour through the challenge phase and back.
+  useEffect(() => {
+    if (room?.phase !== 'board' || room?.rolling || !room?.lastRoll) return undefined;
+    const key = `${room.round}-${room.activePlayerIndex}-${room.lastRoll.finalPosition ?? room.lastRoll.landedPosition}`;
+    if (handledRollRef.current === key) return undefined;
+    handledRollRef.current = key;
+    autoAdvanceTimeoutRef.current = setTimeout(() => { autoAdvanceTimeoutRef.current = null; nextTurnRef.current(); }, 2200);
+    return () => { clearTimeout(autoAdvanceTimeoutRef.current); autoAdvanceTimeoutRef.current = null; };
+  }, [room?.phase, room?.rolling, room?.lastRoll, room?.round, room?.activePlayerIndex]);
+
   if (loading) return <div className="grid min-h-screen place-items-center bg-[#0e1a3a] text-white">Loading game…</div>;
   if (error || !room) return <div className="grid min-h-screen place-items-center bg-[#0e1a3a] text-red-300">Game unavailable. Ask a player to log in first.</div>;
   if (session?.role !== 'host') return <div className="grid min-h-screen place-items-center bg-[#0e1a3a] text-red-300">Host login required.</div>;
@@ -186,47 +232,13 @@ export default function MultiplayerHost() {
     }
   };
 
-  const [rapidCountdown, setRapidCountdown] = useState(5);
-  const advanceRapidRef = useRef(advanceRapid);
+  // Keep the refs pointed at this render's freshest closures (see hook
+  // declarations above) — plain assignments, not hook calls, so it's safe
+  // for this to happen after the early returns.
   advanceRapidRef.current = advanceRapid;
-  useEffect(() => {
-    if (room.phase !== 'rapid-shot') return undefined;
-    setRapidCountdown(5);
-    const tick = setInterval(() => setRapidCountdown((seconds) => Math.max(0, seconds - 1)), 1000);
-    const advance = setTimeout(() => advanceRapidRef.current(), 5000);
-    return () => { clearInterval(tick); clearTimeout(advance); };
-  }, [room.phase, room.rapidShot?.questionIndex]);
-
-  // Auto-advance from the starting-order reveal straight into the board —
-  // host only had to click Start once, this reads the order out loud then
-  // moves on by itself.
-  const [orderCountdown, setOrderCountdown] = useState(5);
-  const beginBoardRef = useRef(beginBoard);
   beginBoardRef.current = beginBoard;
-  useEffect(() => {
-    if (room.phase !== 'order-reveal') return undefined;
-    setOrderCountdown(5);
-    const tick = setInterval(() => setOrderCountdown((seconds) => Math.max(0, seconds - 1)), 1000);
-    const advance = setTimeout(() => beginBoardRef.current(), 5000);
-    return () => { clearInterval(tick); clearTimeout(advance); };
-  }, [room.phase]);
-
-  // Auto-advance turns on the board once a roll (and any tile effect, e.g. a
-  // challenge) has resolved, so the host never has to click "Next Player".
-  // Keyed off the resolved roll so it only fires once per turn, even across
-  // a detour through the challenge phase and back.
-  const nextTurnRef = useRef(nextTurn);
   nextTurnRef.current = nextTurn;
-  const handledRollRef = useRef(null);
-  const autoAdvanceTimeoutRef = useRef(null);
-  useEffect(() => {
-    if (room.phase !== 'board' || room.rolling || !room.lastRoll) return undefined;
-    const key = `${room.round}-${room.activePlayerIndex}-${room.lastRoll.finalPosition ?? room.lastRoll.landedPosition}`;
-    if (handledRollRef.current === key) return undefined;
-    handledRollRef.current = key;
-    autoAdvanceTimeoutRef.current = setTimeout(() => { autoAdvanceTimeoutRef.current = null; nextTurnRef.current(); }, 2200);
-    return () => { clearTimeout(autoAdvanceTimeoutRef.current); autoAdvanceTimeoutRef.current = null; };
-  }, [room.phase, room.rolling, room.lastRoll, room.round, room.activePlayerIndex]);
+
   // Manual safety-net for the host (per AGENTS.md: host can force-advance if
   // a player is stuck/disconnected). Cancels any pending auto-advance first
   // so a turn never gets skipped by both firing.
