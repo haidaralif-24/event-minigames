@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { motion } from 'framer-motion';
 import boardTiles from '../data/boardTiles.json';
 import { TOKEN_COLORS } from '../data/constants.js';
 
@@ -16,8 +15,9 @@ const MAP_W = GRID_W + PAD * 2;
 const MAP_H = GRID_H + PAD * 2;
 const INK = '#1a1a2e';
 
-// One coordinate function is shared by the board tiles, player tokens and
-// player position panel. The game stores positions as zero-based indexes.
+// The board is a serpentine path: tile 1 is the bottom-left tile, then the
+// numbering runs left-to-right on the next row, right-to-left on the row above,
+// and so on. The exact same coordinate is used for tiles and player tokens.
 function tileCenter(index) {
   const safeIndex = Math.min(TOTAL_TILES - 1, Math.max(0, Number(index) || 0));
   const row = Math.floor(safeIndex / COLS);
@@ -65,9 +65,6 @@ function TeamAvatar({ playerIndex, color, playerName, avatar }) {
 
   return (
     <g className="select-none pointer-events-none">
-      {/* The token origin is the tile center. The avatar itself is also centered
-          on that origin, so there is no hidden vertical offset between the
-          stored tile and the rendered avatar. */}
       <ellipse cy="25" rx="18" ry="6" fill={INK} opacity=".22" />
 
       {avatar ? (
@@ -104,7 +101,6 @@ function TeamAvatar({ playerIndex, color, playerName, avatar }) {
         </>
       )}
 
-      {/* Player label stays above the token and does not affect tile placement. */}
       <g transform="translate(0,-48)">
         <rect x="-30" y="-11" width="60" height="20" rx="10" fill="#fffdf5" stroke="#18233f" strokeWidth="2.5" />
         <circle cx="-20" cy="-1" r="7" fill={color} />
@@ -116,14 +112,13 @@ function TeamAvatar({ playerIndex, color, playerName, avatar }) {
 }
 
 function TrailToken({ playerIndex, playerName, color, avatar, offsetX, offsetY, target }) {
+  // Framer Motion's x/y props on an SVG <g> can be affected by CSS/SVG
+  // transform-origin behavior. Use the SVG transform attribute directly so
+  // the token origin is exactly the same point used to draw the tile.
   return (
-    <motion.g
-      initial={false}
-      animate={{ x: target.x + offsetX, y: target.y + offsetY }}
-      transition={{ duration: 0.55, ease: [0.34, 1.2, 0.64, 1] }}
-    >
+    <g transform={`translate(${target.x + offsetX} ${target.y + offsetY})`}>
       <TeamAvatar playerIndex={playerIndex} color={color} playerName={playerName} avatar={avatar} />
-    </motion.g>
+    </g>
   );
 }
 
@@ -211,9 +206,6 @@ export default function MultiplayerBoard({ boardPositions = {}, players = {} }) 
         })}
       </svg>
 
-      {/* The board already has a dedicated host sidebar for player count and
-          progress, so this old "Game Board · 67 tiles · 6 players" badge is
-          intentionally removed to keep the projected map clean. */}
       <div className="pointer-events-none absolute right-5 top-5 flex max-w-[300px] flex-col gap-1.5 rounded-2xl border-4 border-[#18233f] bg-[#fff8e7]/95 p-3 shadow-[0_4px_0_#18233f]">
         {playerIds.map((playerId, index) => {
           const player = players[playerId] || {};
