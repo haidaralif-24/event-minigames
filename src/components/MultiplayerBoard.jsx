@@ -136,16 +136,174 @@ function Dock({ x, y }) {
   </g>;
 }
 
-function Stickman({ color }) {
-  return <g filter="url(#softShadow)">
-    <ellipse cy="24" rx="13" ry="4" fill={INK} opacity=".22" />
-    <path d="M0 2v14M-8 8h16M0 16l-8 9M0 16l8 9" stroke={INK} strokeWidth="4.5" strokeLinecap="round" />
-    <circle cy="-8" r="10" fill={color} stroke={INK} strokeWidth="3.5" />
-    <circle cx="-3.4" cy="-9" r="1.6" fill={INK} /><circle cx="3.4" cy="-9" r="1.6" fill={INK} />
-  </g>;
+function TeamAvatar({ playerIndex, color, playerName }) {
+  const index = playerIndex % 6;
+  return (
+    <g filter="url(#softShadow)" className="select-none pointer-events-none">
+      {/* Ground shadow */}
+      <ellipse cy="18" rx="15" ry="5" fill={INK} opacity=".25" />
+
+      {/* Floating Team Badge above avatar */}
+      <g transform="translate(0, -42)">
+        <rect
+          x="-25"
+          y="-11"
+          width="50"
+          height="19"
+          rx="9.5"
+          fill="#fffdf5"
+          stroke="#18233f"
+          strokeWidth="2.5"
+        />
+        <rect
+          x="-23"
+          y="-9"
+          width="15"
+          height="15"
+          rx="7.5"
+          fill={color}
+        />
+        <text
+          x="-15.5"
+          y="2"
+          textAnchor="middle"
+          fontSize="9.5"
+          fontWeight="900"
+          fill="#fff"
+          fontFamily="Nunito, sans-serif"
+        >
+          {index + 1}
+        </text>
+        <text
+          x="8"
+          y="2.5"
+          textAnchor="middle"
+          fontSize="9"
+          fontWeight="900"
+          fill="#18233f"
+          fontFamily="Nunito, sans-serif"
+        >
+          {playerName.length > 5 ? playerName.slice(0, 4) + '…' : playerName}
+        </text>
+      </g>
+
+      {/* Legs & Shoes */}
+      <path
+        d="M-5 6v10M5 6v10"
+        stroke="#18233f"
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
+      <ellipse cx="-6" cy="16" rx="4" ry="2.5" fill="#18233f" />
+      <ellipse cx="6" cy="16" rx="4" ry="2.5" fill="#18233f" />
+
+      {/* Body / Outfit */}
+      <rect
+        x="-9"
+        y="-3"
+        width="18"
+        height="12"
+        rx="5"
+        fill={color}
+        stroke="#18233f"
+        strokeWidth="3"
+      />
+      {/* Arms */}
+      <path
+        d="M-9 0l-5 6M9 0l5 6"
+        stroke="#18233f"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+      />
+      <circle cx="-14" cy="6" r="2.5" fill="#ffe0bd" stroke="#18233f" strokeWidth="1.5" />
+      <circle cx="14" cy="6" r="2.5" fill="#ffe0bd" stroke="#18233f" strokeWidth="1.5" />
+
+      {/* Head */}
+      <circle
+        cy="-14"
+        r="12"
+        fill="#ffe0bd"
+        stroke="#18233f"
+        strokeWidth="3"
+      />
+
+      {/* Eyes & Cheeks */}
+      <circle cx="-4" cy="-14" r="1.8" fill="#18233f" />
+      <circle cx="4" cy="-14" r="1.8" fill="#18233f" />
+      <circle cx="-3.4" cy="-14.6" r="0.6" fill="#fff" />
+      <circle cx="4.6" cy="-14.6" r="0.6" fill="#fff" />
+      <circle cx="-7" cy="-11" r="1.5" fill="#ff8c8c" opacity=".6" />
+      <circle cx="7" cy="-11" r="1.5" fill="#ff8c8c" opacity=".6" />
+
+      {/* Distinct Headgear per Team (0 to 5) */}
+      {index === 0 && (
+        /* Team 1 (Red): Fiery Ninja Headband with flowing tails */
+        <g>
+          <path d="M-13-18h26v5h-26z" fill="#ef4444" stroke="#18233f" strokeWidth="2.5" />
+          <path d="M12-16l8-4-2 6 6 5-12-3z" fill="#ef4444" stroke="#18233f" strokeWidth="2" />
+          <circle cx="0" cy="-15.5" r="2" fill="#ffea4d" stroke="#18233f" strokeWidth="1" />
+          <path d="M-3-9c2 2 4 2 6 0" fill="none" stroke="#18233f" strokeWidth="1.8" strokeLinecap="round" />
+        </g>
+      )}
+
+      {index === 1 && (
+        /* Team 2 (Green): Dino Horns & Sprout Leaf */
+        <g>
+          <path d="M-10-22c0-5 10-8 20-3-4 7-14 6-20 3z" fill="#22c55e" stroke="#18233f" strokeWidth="2" />
+          <path d="M0-24c0-7 6-9 8-6-1 5-5 6-8 6z" fill="#86efac" stroke="#18233f" strokeWidth="1.5" />
+          <path d="M-5-22l-2-4 4 2z" fill="#ffea4d" stroke="#18233f" strokeWidth="1.5" />
+          <path d="M-3-9c2 2.5 4 2.5 6 0" fill="none" stroke="#18233f" strokeWidth="2" strokeLinecap="round" />
+        </g>
+      )}
+
+      {index === 2 && (
+        /* Team 3 (Blue): Cyber Gamer Headphones & Cool Visor */
+        <g>
+          <path d="M-13-16c0-10 26-10 26 0" fill="none" stroke="#18233f" strokeWidth="3" strokeLinecap="round" />
+          <rect x="-16" y="-18" width="5" height="9" rx="2" fill="#3b82f6" stroke="#18233f" strokeWidth="2" />
+          <rect x="11" y="-18" width="5" height="9" rx="2" fill="#3b82f6" stroke="#18233f" strokeWidth="2" />
+          <rect x="-7" y="-17" width="14" height="4" rx="2" fill="#60a5fa" stroke="#18233f" strokeWidth="1.5" />
+          <path d="M-3-9h6" stroke="#18233f" strokeWidth="2" strokeLinecap="round" />
+        </g>
+      )}
+
+      {index === 3 && (
+        /* Team 4 (Yellow): Golden Crown with Star Gem */
+        <g>
+          <path d="M-10-22l4 4 6-7 6 7 4-4v6h-20z" fill="#f59e0b" stroke="#18233f" strokeWidth="2.5" />
+          <circle cx="0" cy="-21" r="2" fill="#fff" stroke="#18233f" strokeWidth="1" />
+          <circle cx="-6" cy="-19" r="1.2" fill="#ef4444" />
+          <circle cx="6" cy="-19" r="1.2" fill="#3b82f6" />
+          <path d="M-3-8c2 3 4 3 6 0" fill="none" stroke="#18233f" strokeWidth="2" strokeLinecap="round" />
+        </g>
+      )}
+
+      {index === 4 && (
+        /* Team 5 (Purple): Mystic Wizard Hat with Sparkles */
+        <g>
+          <path d="M-14-22h28l-14-14z" fill="#a855f7" stroke="#18233f" strokeWidth="2.5" strokeLinejoin="round" />
+          <path d="M-15-20c10-2 20-2 30 0" stroke="#ffea4d" strokeWidth="3" strokeLinecap="round" />
+          <polygon points="0,-29 1.5,-26 4,-26 2,-24 3,-21 0,-23 -3,-21 -2,-24 -4,-26 -1.5,-26" fill="#ffea4d" />
+          <path d="M-2-9c2 1.5 4 1.5 5 0" fill="none" stroke="#18233f" strokeWidth="1.8" strokeLinecap="round" />
+        </g>
+      )}
+
+      {index === 5 && (
+        /* Team 6 (Pink): Cute Bunny Ears with Bow */
+        <g>
+          <path d="M-8-23c-2-8 3-12 5-11 2 2 0 8-3 12z" fill="#ec4899" stroke="#18233f" strokeWidth="2" />
+          <path d="M-7-23c-1-5 2-8 3-7 1 1 0 5-2 8z" fill="#fbcfe8" />
+          <path d="M8-23c2-8-3-12-5-11-2 2 0 8 3 12z" fill="#ec4899" stroke="#18233f" strokeWidth="2" />
+          <path d="M7-23c1-5-2-8-3-7-1 1 0 5 2 8z" fill="#fbcfe8" />
+          <circle cx="0" cy="-22" r="3" fill="#ffea4d" stroke="#18233f" strokeWidth="1.5" />
+          <path d="M-3-8c2 2 4 2 6 0" fill="none" stroke="#18233f" strokeWidth="2" strokeLinecap="round" />
+        </g>
+      )}
+    </g>
+  );
 }
 
-function TrailToken({ color, offsetX, offsetY, pathRef, tileIndex, tileLengths }) {
+function TrailToken({ playerIndex, playerName, color, offsetX, offsetY, pathRef, tileIndex, tileLengths }) {
   const trailLength = useMotionValue(0);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -159,7 +317,7 @@ function TrailToken({ color, offsetX, offsetY, pathRef, tileIndex, tileLengths }
     const place = (length, hop = 0) => {
       const point = path.getPointAtLength(length);
       x.set(point.x + offsetX);
-      y.set(point.y - 27 + offsetY - hop);
+      y.set(point.y - 18 + offsetY - hop);
     };
     if (!initialized.current) {
       initialized.current = true;
@@ -178,13 +336,13 @@ function TrailToken({ color, offsetX, offsetY, pathRef, tileIndex, tileLengths }
       ease: [0.34, 1.32, 0.64, 1],
       onUpdate: (length) => {
         const progress = Math.min(1, Math.abs(length - from) / Math.abs(target - from));
-        place(length, Math.abs(Math.sin(progress * Math.PI * distance)) * 24);
+        place(length, Math.abs(Math.sin(progress * Math.PI * distance)) * 26);
       },
       onComplete: () => place(target),
     });
     return () => controls.stop();
   }, [offsetX, offsetY, pathRef, tileIndex, tileLengths, trailLength, x, y]);
-  return <motion.g style={{ x, y, opacity: placed ? 1 : 0 }}><Stickman color={color} /></motion.g>;
+  return <motion.g style={{ x, y, opacity: placed ? 1 : 0 }}><TeamAvatar playerIndex={playerIndex} color={color} playerName={playerName} /></motion.g>;
 }
 
 export default function MultiplayerBoard({ boardPositions = {}, players = {} }) {
@@ -274,9 +432,23 @@ export default function MultiplayerBoard({ boardPositions = {}, players = {} }) 
       {Object.entries(boardPositions).map(([playerId, rawPosition], tokenIndex) => {
         const tileIndex = Math.min(TOTAL_TILES - 1, Math.max(0, Number(rawPosition) || 0));
         const playerIndex = Math.max(0, playerIds.indexOf(playerId));
-        const offsetX = (tokenIndex % 3 - 1) * 18;
-        const offsetY = Math.floor(tokenIndex / 3) * 17;
-        return <TrailToken key={playerId} color={TOKEN_COLORS[playerIndex % TOKEN_COLORS.length]} offsetX={offsetX} offsetY={offsetY} pathRef={trailGeometryRef} tileIndex={tileIndex} tileLengths={tileLengths} />;
+        const player = players[playerId] || {};
+        const playerName = player.name || `P${playerIndex + 1}`;
+        const offsetX = ((tokenIndex % 3) - 1) * 22;
+        const offsetY = Math.floor(tokenIndex / 3) * 20;
+        return (
+          <TrailToken
+            key={playerId}
+            playerIndex={playerIndex}
+            playerName={playerName}
+            color={TOKEN_COLORS[playerIndex % TOKEN_COLORS.length]}
+            offsetX={offsetX}
+            offsetY={offsetY}
+            pathRef={trailGeometryRef}
+            tileIndex={tileIndex}
+            tileLengths={tileLengths}
+          />
+        );
       })}
     </svg>
     <div className="pointer-events-none absolute left-5 top-5 rounded-2xl border-4 border-[#18233f] bg-[#fff8e7]/95 px-4 py-3 shadow-[0_4px_0_#18233f]">
