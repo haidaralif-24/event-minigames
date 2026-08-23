@@ -136,8 +136,9 @@ function Dock({ x, y }) {
   </g>;
 }
 
-function TeamAvatar({ playerIndex, color, playerName }) {
+function TeamAvatar({ playerIndex, color, playerName, avatar }) {
   const index = playerIndex % 6;
+  const clipId = `avatar-clip-${index}`;
   return (
     <g filter="url(#softShadow)" className="select-none pointer-events-none">
       {/* Ground shadow */}
@@ -187,123 +188,74 @@ function TeamAvatar({ playerIndex, color, playerName }) {
         </text>
       </g>
 
-      {/* Legs & Shoes */}
-      <path
-        d="M-5 6v10M5 6v10"
-        stroke="#18233f"
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
-      <ellipse cx="-6" cy="16" rx="4" ry="2.5" fill="#18233f" />
-      <ellipse cx="6" cy="16" rx="4" ry="2.5" fill="#18233f" />
+      {/* Avatar token */}
+      <defs>
+        <clipPath id={clipId}>
+          <circle cx="0" cy="-8" r="20" />
+        </clipPath>
+      </defs>
+      {avatar ? (
+        <>
+          <circle cx="0" cy="-8" r="20" fill={color} stroke={INK} strokeWidth="3" />
+          <image
+            href={avatar}
+            x="-20"
+            y="-28"
+            width="40"
+            height="40"
+            preserveAspectRatio="xMidYMid slice"
+            clipPath={`url(#${clipId})`}
+          />
+          <circle cx="0" cy="-8" r="20" fill="none" stroke={INK} strokeWidth="3" />
+        </>
+      ) : (
+        <>
+          {/* Legs & Shoes */}
+          <path
+            d="M-5 6v10M5 6v10"
+            stroke="#18233f"
+            strokeWidth="4"
+            strokeLinecap="round"
+          />
+          <ellipse cx="-6" cy="16" rx="4" ry="2.5" fill="#18233f" />
+          <ellipse cx="6" cy="16" rx="4" ry="2.5" fill="#18233f" />
 
-      {/* Body / Outfit */}
-      <rect
-        x="-9"
-        y="-3"
-        width="18"
-        height="12"
-        rx="5"
-        fill={color}
-        stroke="#18233f"
-        strokeWidth="3"
-      />
-      {/* Arms */}
-      <path
-        d="M-9 0l-5 6M9 0l5 6"
-        stroke="#18233f"
-        strokeWidth="3.5"
-        strokeLinecap="round"
-      />
-      <circle cx="-14" cy="6" r="2.5" fill="#ffe0bd" stroke="#18233f" strokeWidth="1.5" />
-      <circle cx="14" cy="6" r="2.5" fill="#ffe0bd" stroke="#18233f" strokeWidth="1.5" />
+          {/* Body / Outfit */}
+          <rect
+            x="-9"
+            y="-3"
+            width="18"
+            height="12"
+            rx="5"
+            fill={color}
+            stroke="#18233f"
+            strokeWidth="3"
+          />
+          {/* Arms */}
+          <path
+            d="M-9 0l-5 6M9 0l5 6"
+            stroke="#18233f"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+          />
+          <circle cx="-14" cy="6" r="2.5" fill="#ffe0bd" stroke="#18233f" strokeWidth="1.5" />
+          <circle cx="14" cy="6" r="2.5" fill="#ffe0bd" stroke="#18233f" strokeWidth="1.5" />
 
-      {/* Head */}
-      <circle
-        cy="-14"
-        r="12"
-        fill="#ffe0bd"
-        stroke="#18233f"
-        strokeWidth="3"
-      />
-
-      {/* Eyes & Cheeks */}
-      <circle cx="-4" cy="-14" r="1.8" fill="#18233f" />
-      <circle cx="4" cy="-14" r="1.8" fill="#18233f" />
-      <circle cx="-3.4" cy="-14.6" r="0.6" fill="#fff" />
-      <circle cx="4.6" cy="-14.6" r="0.6" fill="#fff" />
-      <circle cx="-7" cy="-11" r="1.5" fill="#ff8c8c" opacity=".6" />
-      <circle cx="7" cy="-11" r="1.5" fill="#ff8c8c" opacity=".6" />
-
-      {/* Distinct Headgear per Team (0 to 5) */}
-      {index === 0 && (
-        /* Team 1 (Red): Fiery Ninja Headband with flowing tails */
-        <g>
-          <path d="M-13-18h26v5h-26z" fill="#ef4444" stroke="#18233f" strokeWidth="2.5" />
-          <path d="M12-16l8-4-2 6 6 5-12-3z" fill="#ef4444" stroke="#18233f" strokeWidth="2" />
-          <circle cx="0" cy="-15.5" r="2" fill="#ffea4d" stroke="#18233f" strokeWidth="1" />
-          <path d="M-3-9c2 2 4 2 6 0" fill="none" stroke="#18233f" strokeWidth="1.8" strokeLinecap="round" />
-        </g>
-      )}
-
-      {index === 1 && (
-        /* Team 2 (Green): Dino Horns & Sprout Leaf */
-        <g>
-          <path d="M-10-22c0-5 10-8 20-3-4 7-14 6-20 3z" fill="#22c55e" stroke="#18233f" strokeWidth="2" />
-          <path d="M0-24c0-7 6-9 8-6-1 5-5 6-8 6z" fill="#86efac" stroke="#18233f" strokeWidth="1.5" />
-          <path d="M-5-22l-2-4 4 2z" fill="#ffea4d" stroke="#18233f" strokeWidth="1.5" />
-          <path d="M-3-9c2 2.5 4 2.5 6 0" fill="none" stroke="#18233f" strokeWidth="2" strokeLinecap="round" />
-        </g>
-      )}
-
-      {index === 2 && (
-        /* Team 3 (Blue): Cyber Gamer Headphones & Cool Visor */
-        <g>
-          <path d="M-13-16c0-10 26-10 26 0" fill="none" stroke="#18233f" strokeWidth="3" strokeLinecap="round" />
-          <rect x="-16" y="-18" width="5" height="9" rx="2" fill="#3b82f6" stroke="#18233f" strokeWidth="2" />
-          <rect x="11" y="-18" width="5" height="9" rx="2" fill="#3b82f6" stroke="#18233f" strokeWidth="2" />
-          <rect x="-7" y="-17" width="14" height="4" rx="2" fill="#60a5fa" stroke="#18233f" strokeWidth="1.5" />
-          <path d="M-3-9h6" stroke="#18233f" strokeWidth="2" strokeLinecap="round" />
-        </g>
-      )}
-
-      {index === 3 && (
-        /* Team 4 (Yellow): Golden Crown with Star Gem */
-        <g>
-          <path d="M-10-22l4 4 6-7 6 7 4-4v6h-20z" fill="#f59e0b" stroke="#18233f" strokeWidth="2.5" />
-          <circle cx="0" cy="-21" r="2" fill="#fff" stroke="#18233f" strokeWidth="1" />
-          <circle cx="-6" cy="-19" r="1.2" fill="#ef4444" />
-          <circle cx="6" cy="-19" r="1.2" fill="#3b82f6" />
-          <path d="M-3-8c2 3 4 3 6 0" fill="none" stroke="#18233f" strokeWidth="2" strokeLinecap="round" />
-        </g>
-      )}
-
-      {index === 4 && (
-        /* Team 5 (Purple): Mystic Wizard Hat with Sparkles */
-        <g>
-          <path d="M-14-22h28l-14-14z" fill="#a855f7" stroke="#18233f" strokeWidth="2.5" strokeLinejoin="round" />
-          <path d="M-15-20c10-2 20-2 30 0" stroke="#ffea4d" strokeWidth="3" strokeLinecap="round" />
-          <polygon points="0,-29 1.5,-26 4,-26 2,-24 3,-21 0,-23 -3,-21 -2,-24 -4,-26 -1.5,-26" fill="#ffea4d" />
-          <path d="M-2-9c2 1.5 4 1.5 5 0" fill="none" stroke="#18233f" strokeWidth="1.8" strokeLinecap="round" />
-        </g>
-      )}
-
-      {index === 5 && (
-        /* Team 6 (Pink): Cute Bunny Ears with Bow */
-        <g>
-          <path d="M-8-23c-2-8 3-12 5-11 2 2 0 8-3 12z" fill="#ec4899" stroke="#18233f" strokeWidth="2" />
-          <path d="M-7-23c-1-5 2-8 3-7 1 1 0 5-2 8z" fill="#fbcfe8" />
-          <path d="M8-23c2-8-3-12-5-11-2 2 0 8 3 12z" fill="#ec4899" stroke="#18233f" strokeWidth="2" />
-          <path d="M7-23c1-5-2-8-3-7-1 1 0 5 2 8z" fill="#fbcfe8" />
-          <circle cx="0" cy="-22" r="3" fill="#ffea4d" stroke="#18233f" strokeWidth="1.5" />
-          <path d="M-3-8c2 2 4 2 6 0" fill="none" stroke="#18233f" strokeWidth="2" strokeLinecap="round" />
-        </g>
+          {/* Head */}
+          <circle
+            cy="-14"
+            r="12"
+            fill="#ffe0bd"
+            stroke="#18233f"
+            strokeWidth="3"
+          />
+        </>
       )}
     </g>
   );
 }
 
-function TrailToken({ playerIndex, playerName, color, offsetX, offsetY, pathRef, tileIndex, tileLengths }) {
+function TrailToken({ playerIndex, playerName, color, avatar, offsetX, offsetY, pathRef, tileIndex, tileLengths }) {
   const trailLength = useMotionValue(0);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -342,7 +294,7 @@ function TrailToken({ playerIndex, playerName, color, offsetX, offsetY, pathRef,
     });
     return () => controls.stop();
   }, [offsetX, offsetY, pathRef, tileIndex, tileLengths, trailLength, x, y]);
-  return <motion.g style={{ x, y, opacity: placed ? 1 : 0 }}><TeamAvatar playerIndex={playerIndex} color={color} playerName={playerName} /></motion.g>;
+  return <motion.g style={{ x, y, opacity: placed ? 1 : 0 }}><TeamAvatar playerIndex={playerIndex} color={color} playerName={playerName} avatar={avatar} /></motion.g>;
 }
 
 export default function MultiplayerBoard({ boardPositions = {}, players = {} }) {
@@ -441,6 +393,7 @@ export default function MultiplayerBoard({ boardPositions = {}, players = {} }) 
             key={playerId}
             playerIndex={playerIndex}
             playerName={playerName}
+            avatar={player.avatar}
             color={TOKEN_COLORS[playerIndex % TOKEN_COLORS.length]}
             offsetX={offsetX}
             offsetY={offsetY}

@@ -32,6 +32,7 @@ export async function login(username, password) {
       players[account.playerId] = {
         id: account.playerId,
         name: account.name,
+        avatar: account.avatar,
         username: account.username,
         connected: true,
         score: existing?.score || 0,
@@ -88,7 +89,7 @@ export async function resetGame() {
   const snapshot = await getDoc(gameRef());
   const players = {};
   Object.values(snapshot.exists() ? (snapshot.data().players || {}) : {}).forEach((player) => {
-    players[player.id] = { id: player.id, name: player.name, username: player.username, connected: false, score: 0, rapidScore: 0, position: 0 };
+    players[player.id] = { id: player.id, name: player.name, avatar: player.avatar, username: player.username, connected: false, score: 0, rapidScore: 0, position: 0 };
   });
   await setDoc(gameRef(), { ...getInitialGameState(), players, hostId: 'host', hostName: HOST_ACCOUNT.name, maxPlayers: MAX_PLAYERS, resetAt: serverTimestamp(), updatedAt: serverTimestamp() });
 }

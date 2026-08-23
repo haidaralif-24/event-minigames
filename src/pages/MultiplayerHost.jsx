@@ -31,7 +31,11 @@ function PlayerRow({ player, index, started, position }) {
   const color = TOKEN_COLORS[index % TOKEN_COLORS.length];
   const progress = Math.round((Math.max(0, position || 0) / (TOTAL_TILES - 1)) * 100);
   return <div className="flex items-center gap-2.5 rounded-xl px-1.5 py-2">
-    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] border-[2.5px] border-[#18233f] text-xs font-black text-white" style={{ backgroundColor: color }}>#{index + 1}</div>
+    {player.avatar ? (
+      <img src={player.avatar} alt={player.name} className="h-9 w-9 shrink-0 rounded-[10px] border-[2.5px] border-[#18233f] object-cover" />
+    ) : (
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] border-[2.5px] border-[#18233f] text-xs font-black text-white" style={{ backgroundColor: color }}>#{index + 1}</div>
+    )}
     <div className="min-w-0 flex-1">
       <p className="truncate text-[13px] font-black text-[#18233f]">{player.name}</p>
       <p className="text-[10.5px] font-extrabold text-[#7a8395]">{player.connected ? (started ? `Tile ${(position || 0) + 1} / ${TOTAL_TILES}` : 'Connected') : 'Waiting to join'}</p>
@@ -53,7 +57,11 @@ function Leaderboard({ rankings, players, boardPositions }) {
       return <div key={id} className={`rounded-xl px-2 py-2 ${index === 0 ? 'bg-[#fff3c4]' : ''}`}>
         <div className="flex items-center gap-2">
           <span className="w-6 text-center text-sm font-black text-[#18233f]">{rank}</span>
-          <span className="h-3.5 w-3.5 rounded-[5px] border-2 border-[#18233f]" style={{ backgroundColor: color }} />
+          {player?.avatar ? (
+            <img src={player.avatar} alt={player.name} className="h-4 w-4 shrink-0 rounded-[4px] border-2 border-[#18233f] object-cover" />
+          ) : (
+            <span className="h-3.5 w-3.5 rounded-[5px] border-2 border-[#18233f]" style={{ backgroundColor: color }} />
+          )}
           <span className="min-w-0 flex-1 truncate text-xs font-black text-[#18233f]">{player?.name || id}</span>
           <span className="text-[11px] font-extrabold text-[#7a8395]">{position + 1}/{TOTAL_TILES}</span>
         </div>
@@ -74,7 +82,11 @@ function FinishPodium({ placementIds, players, boardPositions }) {
       const position = (boardPositions?.[id] || 0) + 1;
       return <div key={id} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${index === 0 ? 'bg-[#fff3c4]' : 'bg-[#f1ecd9]'}`}>
         <span className="text-2xl">{medals[index]}</span>
-        <span className="h-4 w-4 rounded-[5px] border-2 border-[#18233f]" style={{ backgroundColor: color }} />
+        {player?.avatar ? (
+          <img src={player.avatar} alt={player.name} className="h-8 w-8 shrink-0 rounded-[8px] border-2 border-[#18233f] object-cover" />
+        ) : (
+          <span className="h-4 w-4 rounded-[5px] border-2 border-[#18233f]" style={{ backgroundColor: color }} />
+        )}
         <div className="min-w-0 flex-1 text-left"><p className="text-[10px] font-black uppercase tracking-[.14em] text-[#ff8c4d]">{labels[index]}</p><p className="truncate font-display text-base text-[#18233f]">{player?.name || id}</p></div>
         <span className="text-xs font-extrabold text-[#7a8395]">Tile {position}</span>
       </div>;
@@ -102,6 +114,7 @@ export default function MultiplayerHost() {
   const playerSlots = PLAYER_ACCOUNTS.map((account) => players[account.playerId] || {
     id: account.playerId,
     name: account.name,
+    avatar: account.avatar,
     connected: false,
   });
   const activePlayers = sortedPlayers.filter((player) => player.connected !== false);
