@@ -1,6 +1,6 @@
 import { doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
-import { getInitialGameState, MAX_PLAYERS, RAPID_QUESTIONS } from './gameLogic.js';
+import { getInitialGameState, MAX_PLAYERS, RAPID_QUESTIONS, drawFromBag } from './gameLogic.js';
 import { ALL_ACCOUNTS, HOST_ACCOUNT, PLAYER_ACCOUNTS } from '../data/loginAccounts.js';
 import boardTiles from '../data/boardTiles.json';
 import challengeContent from '../content/maulid-nabi/challenge.json';
@@ -83,12 +83,12 @@ export async function joinRoom(_unusedRoomCode, username, password) { return log
 export function subscribeToRoom(_roomCode, callback, onError) { return onSnapshot(gameRef(), (snapshot) => callback(snapshot.exists() ? { id: GAME_PATH, ...snapshot.data() } : null), onError); }
 export async function updateRoom(_roomCode, updates) { await updateDoc(gameRef(), { ...updates, updatedAt: serverTimestamp() }); }
 
-// Pick a random mini-game quiz question, avoiding an immediate repeat of the
-// previously used one so consecutive rounds don't ask the same thing.
-export function pickMinigameQuestion(previousQuestionId) {
-  const pool = minigameQuestions.filter((question) => question.id !== previousQuestionId);
-  const options = pool.length ? pool : minigameQuestions;
-  return options[Math.floor(Math.random() * options.length)];
+// Pick the next mini-game quiz question from a shuffle-bag so every question
+// appears exactly once per cycle (no repeats until the whole pool is used).
+// Returns both the chosen id and the updated bag to persist in game state.
+export function pickMinigameQuestion(bag, previousQuestionId) {
+  const pool = minigameQuestions.map((question) => question.id);
+  return drawFromBag(pool, bag, previousQuestionId);
 }
 
 export async function submitMinigameAnswer(_roomCode, playerId, choiceIndex) {
@@ -196,8 +196,9 @@ export async function rollForActivePlayer(playerId, value) {
     const base = { boardPositions, playerCheckpoints, rolling: null, lastRoll: { value: roll, playerId, landedPosition }, updatedAt: serverTimestamp() };
 
     if (landedTile?.type === 'challenge') {
-      const questionIndex = (landedPosition + (game.round || 0) + playerId.length) % challengeContent.questions.length;
-      transaction.update(gameRef(), { ...base, phase: 'challenge', challenge: { teamId: playerId, questionId: challengeContent.questions[questionIndex].id, landedPosition, startedAt: serverTimestamp(), resolved: false } });
+      const pool = challengeContent.questions.map((question) => question.id);
+      const { id: challengeQuestionId, bag: challengeBag } = drawFromBag(pool, game.challengeBag, game.challenge?.questionId);
+      transaction.update(gameRef(), { ...base, phase: 'challenge', challenge: { teamId: playerId, questionId: challengeQuestionId, landedPosition, startedAt: serverTimestamp(), resolved: false }, challengeBag });
       return;
     }
 

@@ -10,7 +10,30 @@ export const RAPID_QUESTIONS = [
 ];
 export function rollDice(sides = 6) { return Math.floor(Math.random() * sides) + 1; }
 export function shuffleArray(array) { const shuffled = [...array]; for (let i = shuffled.length - 1; i > 0; i -= 1) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } return shuffled; }
-export function getInitialGameState() { return { phase: 'lobby', round: 0, turnOrder: [], activePlayerIndex: 0, boardPositions: {}, playerCheckpoints: {}, diceSize: 6, lastRoll: null, rolling: null, winner: null, rapidShot: { questionIndex: 0, answers: {}, scores: {}, submitted: {} }, minigame: null }; }
+// Shuffle-bag draw: returns the next id from `pool`, removing it from `bag`
+// (the list of not-yet-shown ids). When the bag is empty it refills with a
+// fresh shuffle of the whole pool, so every question appears exactly once per
+// cycle before any repeats. `avoidId` (the most recently shown id) is kept out
+// of the first slot after a refill so a question never repeats back-to-back
+// across a cycle boundary.
+export function drawFromBag(pool, bag, avoidId) {
+  const poolIds = Array.isArray(pool) ? pool : [];
+  if (!poolIds.length) return { id: null, bag: [] };
+  let remaining = Array.isArray(bag) && bag.length ? [...bag] : null;
+  if (!remaining) {
+    remaining = shuffleArray([...poolIds]);
+    if (avoidId && remaining.length > 1) {
+      const lastIdx = remaining.length - 1;
+      if (remaining[lastIdx] === avoidId) {
+        const other = remaining.findIndex((id, idx) => idx !== lastIdx && id !== avoidId);
+        if (other !== -1) { const tmp = remaining[lastIdx]; remaining[lastIdx] = remaining[other]; remaining[other] = tmp; }
+      }
+    }
+  }
+  const id = remaining.pop();
+  return { id, bag: remaining };
+}
+export function getInitialGameState() { return { phase: 'lobby', round: 0, turnOrder: [], activePlayerIndex: 0, boardPositions: {}, playerCheckpoints: {}, diceSize: 6, lastRoll: null, rolling: null, winner: null, rapidShot: { questionIndex: 0, answers: {}, scores: {}, submitted: {} }, minigame: null, challengeBag: [], minigameBag: [] }; }
 export function getPlayerIds(players = {}) { return Object.keys(players).filter((id) => players[id] && players[id].connected !== false); }
 export function getActivePlayerId(gameState) { return gameState?.turnOrder?.[gameState?.activePlayerIndex ?? 0] || null; }
 export function resolveRapidShotOrder(players, rapidScores = {}) { return getPlayerIds(players).sort((a, b) => (rapidScores[b] || 0) - (rapidScores[a] || 0) || Math.random() - 0.5); }

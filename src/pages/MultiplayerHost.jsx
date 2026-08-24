@@ -252,6 +252,8 @@ export default function MultiplayerHost() {
       round: 1,
       turnOrder: [],
       activePlayerIndex: 0,
+      challengeBag: [],
+      minigameBag: [],
       boardPositions: Object.fromEntries(active.map((player) => [player.id, 0])),
       playerCheckpoints: Object.fromEntries(active.map((player) => [player.id, 0])),
       winner: null,
@@ -294,14 +296,15 @@ export default function MultiplayerHost() {
       console.log(`[host] nextTurn → entering 'minigame' (round ${g.round || 1}, previous type: ${g.minigame?.type || 'none'})`);
       const options = MINI_GAMES.filter((game) => game.id !== g.minigame?.type);
       const game = (options.length ? options : MINI_GAMES)[Math.floor(Math.random() * (options.length ? options.length : MINI_GAMES.length))];
-      const question = pickMinigameQuestion(g.minigame?.questionId);
+      const { id: minigameQuestionId, bag: minigameBag } = pickMinigameQuestion(g.minigameBag, g.minigame?.questionId);
       return safeUpdate('Start mini-game', () => update({
         phase: 'minigame',
         minigame: {
           type: game.id, label: game.label, description: game.description,
-          questionId: question.id, answers: {}, submitted: {},
+          questionId: minigameQuestionId, answers: {}, submitted: {},
           startedAt: Date.now(),
         },
+        minigameBag,
       }));
     }
     console.log(`[host] nextTurn → advancing to player index ${nextIndex} (round ${g.round || 1})`);
