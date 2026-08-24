@@ -138,7 +138,7 @@ export default function MultiplayerHost() {
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
   const [rapidCountdown, setRapidCountdown] = useState(8);
   const [orderCountdown, setOrderCountdown] = useState(5);
-  const [miniCountdown, setMiniCountdown] = useState(12);
+  const [miniCountdown, setMiniCountdown] = useState(15);
   const [advanceError, setAdvanceError] = useState(null);
 
   // These refs let effects below always call the *latest* handler (defined

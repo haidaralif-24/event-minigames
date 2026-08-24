@@ -20,6 +20,18 @@ const ANSWER_STYLES = [
 ];
 const ANSWER_ICONS = ['▲', '◆', '●', '■'];
 
+// Reveal windows mirror the host's timers (MultiplayerHost.jsx): the answer
+// is revealed 8s after each rapid-shot question appears and 12s after each
+// round-break mini-game question. The player runs a local countdown so it has
+// a live clock without another Firestore round-trip.
+const RAPID_REVEAL_SECONDS = 8;
+const MINI_REVEAL_SECONDS = 15;
+
+function TimerBadge({ seconds, revealed }) {
+  if (revealed) return <span className="inline-flex items-center gap-2 rounded-full bg-[#dff8e7] px-5 py-2 text-sm font-black text-[#1c6b3a]">✅ Answer revealed</span>;
+  return <span className="inline-flex items-center gap-2 rounded-full bg-[#18233f] px-5 py-2 text-sm font-black text-white">⏱ {seconds}s left</span>;
+}
+
 function PlayerShell({ children, title, step, me, room }) {
   const connected = Object.values(room.players || {}).filter((player) => player.connected !== false).length;
   return (
@@ -89,6 +101,10 @@ export default function MultiplayerPlay() {
   const { room, loading, error, session } = useRoom();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [rapidSecondsLeft, setRapidSecondsLeft] = useState(RAPID_REVEAL_SECONDS);
+  const [miniSecondsLeft, setMiniSecondsLeft] = useState(MINI_REVEAL_SECONDS);
+  const rapidQRef = useRef(null);
+  const miniQRef = useRef(null);
 
   useEffect(() => {
     if (session?.roomCode && session?.playerId) markPlayerConnected(session.roomCode, session.playerId).catch(() => {});
@@ -111,6 +127,27 @@ export default function MultiplayerPlay() {
     }
     prevChallengeResolved.current = resolved;
   }, [room?.challenge?.resolved]);
+
+  // Live countdown for the player's rapid-shot question, mirroring the host's
+  // 8s reveal window. Resets whenever the host advances to a new question.
+  useEffect(() => {
+    if (room.phase !== 'rapid-shot') return undefined;
+    if (room.rapidShot?.revealed) { setRapidSecondsLeft(0); return undefined; }
+    const qIndex = room.rapidShot?.questionIndex || 0;
+    if (rapidQRef.current !== qIndex) { rapidQRef.current = qIndex; setRapidSecondsLeft(RAPID_REVEAL_SECONDS); }
+    const tick = setInterval(() => setRapidSecondsLeft((seconds) => (seconds > 0 ? seconds - 1 : 0)), 1000);
+    return () => clearInterval(tick);
+  }, [room.phase, room.rapidShot?.questionIndex, room.rapidShot?.revealed]);
+
+  // Live countdown for the player's round-break mini-game question (12s window).
+  useEffect(() => {
+    if (room.phase !== 'minigame') return undefined;
+    if (room.minigame?.revealed) { setMiniSecondsLeft(0); return undefined; }
+    const qIndex = room.minigame?.questionIndex || 0;
+    if (miniQRef.current !== qIndex) { miniQRef.current = qIndex; setMiniSecondsLeft(MINI_REVEAL_SECONDS); }
+    const tick = setInterval(() => setMiniSecondsLeft((seconds) => (seconds > 0 ? seconds - 1 : 0)), 1000);
+    return () => clearInterval(tick);
+  }, [room.phase, room.minigame?.questionIndex, room.minigame?.revealed]);
 
   if (loading) return <div className="grid h-screen place-items-center bg-[#f4f4f7] text-xl font-black">Connecting…</div>;
   if (error || !room) return <div className="grid h-screen place-items-center bg-[#f4f4f7] text-xl font-black text-red-600">Game unavailable.</div>;
@@ -184,12 +221,13 @@ export default function MultiplayerPlay() {
     {room.phase === 'rapid-shot' && <section className="mx-auto max-w-5xl">
       <PhaseLabel step={`QUESTION ${(room.rapidShot?.questionIndex || 0) + 1} / ${RAPID_QUESTIONS.length}`}>Rapid Shot</PhaseLabel>
       <div className="rounded-3xl bg-white px-10 py-10 shadow-xl ring-1 ring-black/5">
+        <div className="mb-5 flex justify-center"><TimerBadge seconds={rapidSecondsLeft} revealed={Boolean(room.rapidShot?.revealed)} /></div>
         <h1 className="mx-auto max-w-4xl text-center text-4xl font-black leading-tight">{rapidQuestion?.text}</h1>
         <div className="mt-9 grid grid-cols-2 gap-5">
           {rapidQuestion?.choices?.map((choice, index) => <AnswerButton key={choice} choice={choice} index={index} selected={submitted && room.rapidShot?.answers?.[session.playerId] === index} disabled={submitted || busy} onClick={() => sendRapid(index)} />)}
         </div>
         <div className="mt-7 min-h-8 text-center font-black text-[#4d79ff]">{submitted ? '✓ Answer locked. Waiting for the other players…' : message}</div>
-        {submitted && <AnswerReveal question={rapidQuestion} playerChoiceIndex={room.rapidShot?.answers?.[session.playerId]} correct={room.rapidShot?.answers?.[session.playerId] === rapidQuestion?.answerIndex} label="Rapid Shot · Answer" />}
+        {(submitted || room.rapidShot?.revealed) && <AnswerReveal question={rapidQuestion} playerChoiceIndex={room.rapidShot?.answers?.[session.playerId]} correct={room.rapidShot?.answers?.[session.playerId] === rapidQuestion?.answerIndex} label="Rapid Shot · Answer" />}
       </div>
     </section>}
 
@@ -220,13 +258,14 @@ export default function MultiplayerPlay() {
     {room.phase === 'minigame' && <section className="mx-auto max-w-5xl">
       <PhaseLabel step={`QUESTION ${minigameIndex + 1} / ${(room.minigame?.questionIds || []).length}`}>Mini-game</PhaseLabel>
       <div className="rounded-3xl bg-white px-10 py-10 shadow-xl ring-1 ring-black/5">
+        <div className="mb-5 flex justify-center"><TimerBadge seconds={miniSecondsLeft} revealed={Boolean(room.minigame?.revealed)} /></div>
         <p className="text-center text-[11px] font-black uppercase tracking-[.16em] text-[#ff8c4d]">{room.minigame?.label}</p>
         <h1 className="mx-auto mt-1 max-w-4xl text-center text-4xl font-black leading-tight">{minigameQuestion?.text}</h1>
         <div className="mt-9 grid grid-cols-2 gap-5">
           {minigameQuestion?.choices?.map((choice, index) => <AnswerButton key={choice} choice={choice} index={index} selected={miniSubmitted && miniAnswer?.choiceIndex === index} disabled={miniSubmitted || busy} onClick={() => sendMinigame(index)} />)}
         </div>
         <div className="mt-7 min-h-8 text-center font-black text-[#4d79ff]">{miniSubmitted ? '✓ Answer locked. Waiting for the other players…' : message}</div>
-        {miniSubmitted && <AnswerReveal question={minigameQuestion} playerChoiceIndex={miniAnswer?.choiceIndex} correct={miniAnswer?.choiceIndex === minigameQuestion?.answerIndex} label="Round Break · Answer" />}
+        {(miniSubmitted || room.minigame?.revealed) && <AnswerReveal question={minigameQuestion} playerChoiceIndex={miniAnswer?.choiceIndex} correct={miniAnswer?.choiceIndex === minigameQuestion?.answerIndex} label="Round Break · Answer" />}
       </div>
     </section>}
 

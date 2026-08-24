@@ -19,8 +19,8 @@ export const PHASES = { LOBBY: 'lobby', RAPID_SHOT: 'rapid-shot', ORDER_REVEAL: 
 
 // The engine still exposes the event's four game templates for future rounds.
 export const MINI_GAMES = [
-  { id: 'rapid-shot', label: 'Rapid Shot', description: 'Answer before the timer runs out.', timeLimit: 12 },
-  { id: 'quick-fire', label: 'Quick Fire', description: 'One question. One shot.', timeLimit: 10 },
-  { id: 'brain-blitz', label: 'Brain Blitz', description: 'Think fast and steal the top spot.', timeLimit: 12 },
-  { id: 'sprint-trivia', label: 'Sprint Trivia', description: 'A short trivia sprint decides who rolls first next round.', timeLimit: 10 },
+  { id: 'rapid-shot', label: 'Rapid Shot', description: 'Answer before the timer runs out.', timeLimit: 15 },
+  { id: 'quick-fire', label: 'Quick Fire', description: 'One question. One shot.', timeLimit: 15 },
+  { id: 'brain-blitz', label: 'Brain Blitz', description: 'Think fast and steal the top spot.', timeLimit: 15 },
+  { id: 'sprint-trivia', label: 'Sprint Trivia', description: 'A short trivia sprint decides who rolls first next round.', timeLimit: 15 },
 ];
