@@ -7,6 +7,35 @@ import challengeContent from '../content/maulid-nabi/challenge.json';
 import minigameQuestions from '../content/maulid-nabi/minigameQuestions.json';
 
 const GAME_PATH = 'gameState/current';
+
+// Firestore transactions on the single shared game document contend heavily
+// with 4–6 players + host all writing at once, so commits routinely fail with
+// `failed-precondition` (optimistic-concurrency conflict). Retry those
+// transient conflicts with backoff so a roll/answer doesn't just drop — a
+// dropped transaction leaves `rolling` stuck and stalls the whole game, which
+// is what made questions stop appearing. SDK's own retry is disabled (the `1`
+// arg) so we own the retry loop and can log it.
+const TRANSIENT_TXN_CODES = ['aborted', 'failed-precondition'];
+async function runTransactionWithRetry(transactionFn, { maxAttempts = 6, baseDelayMs = 200 } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      await runTransaction(db, transactionFn, 1);
+      return;
+    } catch (error) {
+      lastError = error;
+      const message = `${error?.code || ''} ${error?.message || ''}`.toLowerCase();
+      const transient = TRANSIENT_TXN_CODES.some((code) => message.includes(code));
+      if (!transient) throw error;
+      if (attempt < maxAttempts - 1) {
+        const delay = baseDelayMs * 2 ** attempt;
+        console.warn(`[firestore] transaction conflict (attempt ${attempt + 1}/${maxAttempts}) — retrying in ${delay}ms`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
 const SESSION_KEY = 'event-minigame-player-session';
 const gameRef = () => doc(db, 'gameState', 'current');
 
@@ -24,7 +53,7 @@ export async function login(username, password) {
   const account = getAccount(username, password);
   if (!account) throw new Error('Incorrect username or password.');
   const ref = gameRef();
-  await runTransaction(db, async (transaction) => {
+  await runTransactionWithRetry(async (transaction) => {
     const snapshot = await transaction.get(ref);
     const current = snapshot.exists() ? snapshot.data() : getInitialGameState();
     const players = { ...(current.players || {}) };
@@ -64,7 +93,7 @@ export function pickMinigameQuestion(previousQuestionId) {
 
 export async function submitMinigameAnswer(_roomCode, playerId, choiceIndex) {
   const ref = gameRef();
-  await runTransaction(db, async (transaction) => {
+  await runTransactionWithRetry(async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error('Game is not initialized.');
     const game = snapshot.data();
@@ -80,7 +109,7 @@ export async function submitMinigameAnswer(_roomCode, playerId, choiceIndex) {
 
 export async function submitRapidAnswer(_roomCode, playerId, choiceIndex) {
   const ref = gameRef();
-  await runTransaction(db, async (transaction) => {
+  await runTransactionWithRetry(async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error('Game is not initialized.');
     const room = snapshot.data(); const shot = room.rapidShot || {}; const index = shot.questionIndex || 0;
@@ -126,7 +155,7 @@ export function getPlayerAccounts() { return PLAYER_ACCOUNTS; }
 // so every connected view (host, spectator board, other players) can render
 // the same live dice animation instead of only the roller seeing it locally.
 export async function beginRoll(playerId) {
-  await runTransaction(db, async (transaction) => {
+  await runTransactionWithRetry(async (transaction) => {
     const snapshot = await transaction.get(gameRef());
     if (!snapshot.exists()) throw new Error('Game is not initialized.');
     const game = snapshot.data();
@@ -145,7 +174,7 @@ export async function rollForActivePlayer(playerId, dice) {
   const d1 = Math.min(6, Math.max(1, Number(dice?.[0]) || 1));
   const d2 = Math.min(6, Math.max(1, Number(dice?.[1]) || 1));
   const roll = d1 + d2;
-  await runTransaction(db, async (transaction) => {
+  await runTransactionWithRetry(async (transaction) => {
     const snapshot = await transaction.get(gameRef());
     if (!snapshot.exists()) throw new Error('Game is not initialized.');
     const game = snapshot.data();
@@ -185,7 +214,7 @@ export async function rollForActivePlayer(playerId, dice) {
 }
 
 export async function submitChallengeChoice(playerId, choiceIndex) {
-  await runTransaction(db, async (transaction) => {
+  await runTransactionWithRetry(async (transaction) => {
     const snapshot = await transaction.get(gameRef());
     if (!snapshot.exists()) throw new Error('Game is not initialized.');
     const game = snapshot.data();

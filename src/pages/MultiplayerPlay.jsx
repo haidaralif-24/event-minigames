@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Dice from '../components/Dice.jsx';
 import { useRoom } from '../hooks/useRoom.js';
-import { beginRoll, markPlayerConnected, markPlayerDisconnected, rollForActivePlayer, submitChallengeChoice, submitMinigameAnswer, submitRapidAnswer } from '../services/roomService.js';
+import { beginRoll, markPlayerConnected, markPlayerDisconnected, rollForActivePlayer, submitChallengeChoice, submitMinigameAnswer, submitRapidAnswer, updateRoom } from '../services/roomService.js';
 
 // Keep in sync with the animation feel in Dice.jsx — this is how long the
 // dice visibly rolls for everyone (host, board, other players) before the
@@ -100,7 +100,10 @@ export default function MultiplayerPlay() {
       const die2 = Math.floor(Math.random() * 6) + 1;
       setTimeout(async () => {
         try { await rollForActivePlayer(session.playerId, [die1, die2]); }
-        catch (rollError) { setMessage(rollError.message || 'Could not roll.'); }
+        catch (rollError) {
+          setMessage(rollError.message || 'Could not roll.');
+          try { await updateRoom(session.roomCode, { rolling: null }); } catch {}
+        }
         finally { setBusy(false); }
       }, ROLL_ANIMATION_MS);
     } catch (rollError) {
