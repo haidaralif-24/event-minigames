@@ -7,6 +7,9 @@ export const RAPID_QUESTIONS = [
   { id: 'q1', text: 'What is the first month in the Islamic calendar?', choices: ['Muharram', 'Safar', 'Rajab', 'Ramadan'], answerIndex: 0 },
   { id: 'q2', text: 'How many obligatory prayers are there each day?', choices: ['3', '4', '5', '7'], answerIndex: 2 },
   { id: 'q3', text: 'What is the name of the month in which Muslims fast?', choices: ['Shawwal', 'Ramadan', 'Dhu al-Hijjah', "Sha'ban"], answerIndex: 1 },
+  { id: 'q4', text: "During the Quraysh boycott of Banu Hashim, imposed to pressure the Prophet's (PBUH) clan into abandoning him, in which specific location outside the Kaaba did Banu Hashim and Banu al-Muttalib take refuge for roughly three years?", choices: ["Shi'b Abi Talib (the quarter/ravine of Abu Talib)", "Ta'if", 'Mount Uhud', 'The valley of Mina'], answerIndex: 0 },
+  { id: 'q5', text: 'The Hilf al-Fudul (Alliance of the Virtuous) was a pre-Islamic pact in Makkah that the Prophet (PBUH) later said he would still honor even after Islam. What was its primary stated purpose?', choices: ['To defend the trade routes to Syria', 'To protect the weak and wronged, ensuring the oppressed received justice regardless of tribe', 'To unite the Quraysh clans under one leader', 'To fund the rebuilding of the Kaaba'], answerIndex: 1 },
+  { id: 'q6', text: "Year 10 of Prophethood is known as 'Aam al-Huzn' (the Year of Sorrow), following the deaths of two people central to the Prophet's (PBUH) support in Makkah. Who were they?", choices: ['Abu Talib and Khadijah', 'Abu Bakr and Umar', 'Hamzah and Ja\'far', 'Waraqah ibn Nawfal and Bilal'], answerIndex: 0 },
 ];
 export function rollDice(sides = 6) { return Math.floor(Math.random() * sides) + 1; }
 export function shuffleArray(array) { const shuffled = [...array]; for (let i = shuffled.length - 1; i > 0; i -= 1) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } return shuffled; }

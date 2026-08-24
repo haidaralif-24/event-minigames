@@ -72,6 +72,43 @@ function Leaderboard({ rankings, players, boardPositions }) {
   </div>;
 }
 
+// Compact horizontal player row used during Rapid Shot / Mini-game so the
+// board+leaderboard can shrink to a strip instead of disappearing, while the
+// question panel below takes over most of the screen.
+function PlayerStrip({ activePlayers, mode, rapidScores, boardPositions }) {
+  if (!activePlayers.length) return null;
+  return <div className="flex flex-wrap items-center justify-center gap-2.5 rounded-2xl border-2 border-white/10 bg-[#132352] px-4 py-3">
+    {activePlayers.map((player, index) => {
+      const color = TOKEN_COLORS[index % TOKEN_COLORS.length];
+      const stat = mode === 'rapid' ? `${rapidScores?.[player.id] || 0} pts` : `Tile ${(boardPositions?.[player.id] || 0) + 1}/${TOTAL_TILES}`;
+      return <div key={player.id} className="flex items-center gap-2 rounded-xl bg-[#0e1a3a] px-2.5 py-1.5">
+        {player.avatar ? (
+          <img src={player.avatar} alt={player.name} className="h-6 w-6 shrink-0 rounded-[6px] border-2 border-white/20 object-cover" />
+        ) : (
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] text-[9px] font-black text-white" style={{ backgroundColor: color }}>#{index + 1}</span>
+        )}
+        <span className="max-w-[90px] truncate text-[11.5px] font-black text-white">{player.name}</span>
+        <span className="text-[10px] font-extrabold text-[#8a93b8]">{stat}</span>
+      </div>;
+    })}
+  </div>;
+}
+
+// Big, projector-friendly question panel for Rapid Shot and the round-break
+// mini-game — replaces the board as the main focus while these phases run,
+// since the whole room should be reading the question, not the board.
+function PresentationQuestion({ eyebrow, questionText, choices, revealed, correctIndex, answeredLabel, footer }) {
+  return <section className="rounded-[24px] bg-[#fff8e7] px-6 py-8 text-[#18233f] md:px-12 md:py-12">
+    <p className="text-center text-[11px] font-black uppercase tracking-[.2em] text-[#ff8c4d]">{eyebrow}</p>
+    <h2 className="mx-auto mt-4 max-w-4xl text-center font-display text-3xl leading-tight md:text-[40px]">{questionText}</h2>
+    <div className="mx-auto mt-9 grid max-w-4xl grid-cols-1 gap-4 md:grid-cols-2">
+      {choices?.map((choice, index) => <div key={choice} className={`rounded-2xl border-2 p-5 text-left text-base font-bold md:text-lg ${revealed && index === correctIndex ? 'border-[#3cae61] bg-[#dff8e7] text-[#1c6b3a]' : 'border-[#18233f]/10 bg-white text-[#18233f]'}`}><span className="mr-2 font-black text-[#ff8c4d]">{['A', 'B', 'C', 'D'][index]}.</span>{choice}{revealed && index === correctIndex ? ' ✅' : ''}</div>)}
+    </div>
+    <p className="mt-8 text-center text-sm font-extrabold text-[#7a8395]">{answeredLabel}</p>
+    {footer}
+  </section>;
+}
+
 function FinishPodium({ placementIds, players, boardPositions }) {
   const labels = ['Winner', '2nd Place', '3rd Place'];
   const medals = ['🏆', '🥈', '🥉'];
@@ -99,7 +136,7 @@ export default function MultiplayerHost() {
   const { room, loading, error, session } = useRoom();
   const [resetBusy, setResetBusy] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
-  const [rapidCountdown, setRapidCountdown] = useState(5);
+  const [rapidCountdown, setRapidCountdown] = useState(8);
   const [orderCountdown, setOrderCountdown] = useState(5);
   const [miniCountdown, setMiniCountdown] = useState(12);
   const [advanceError, setAdvanceError] = useState(null);
@@ -144,9 +181,9 @@ export default function MultiplayerHost() {
       update({ 'rapidShot.revealed': true });
       return undefined;
     }
-    setRapidCountdown(5);
+    setRapidCountdown(8);
     const tick = setInterval(() => setRapidCountdown((seconds) => Math.max(0, seconds - 1)), 1000);
-    const end = setTimeout(() => update({ 'rapidShot.revealed': true }), 5000);
+    const end = setTimeout(() => update({ 'rapidShot.revealed': true }), 8000);
     return () => { clearInterval(tick); clearTimeout(end); };
   }, [room?.phase, room?.rapidShot?.questionIndex, room?.rapidShot?.revealed, room?.rapidShot?.submitted, room?.players]);
 
@@ -397,37 +434,69 @@ export default function MultiplayerHost() {
       <div className="flex items-center gap-2.5"><PhaseBadge phase={room.phase} round={room.round} /><button onClick={toggleFullscreen} className="rounded-xl border-2 border-white/15 bg-[#132352] px-4 py-3 font-display text-[13px] text-white">{isFullscreen ? 'Exit Fullscreen' : 'Present Fullscreen'}</button><button onClick={reset} disabled={resetBusy} className="rounded-xl bg-[#ff8c4d] px-5 py-3 font-display text-[13px] text-[#18233f] shadow-[0_4px_0_rgba(0,0,0,.25)] disabled:opacity-50">{resetBusy ? 'Resetting…' : 'Reset Game'}</button></div>
     </header>
 
-    <main className="mx-auto grid max-w-[1520px] items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-      <section><Board boardPositions={room.boardPositions} players={players} /></section>
+    {(room.phase === 'rapid-shot' || room.phase === 'minigame') ? (
+      // Presentation layout: the question takes over the main screen, and
+      // players/board shrink to a thin strip above it instead of the usual
+      // 380px sidebar — the whole room should be reading the question here,
+      // not looking at the board.
+      <main className="mx-auto max-w-[1180px] space-y-4">
+        <PlayerStrip
+          activePlayers={activePlayers}
+          mode={room.phase === 'rapid-shot' ? 'rapid' : 'board'}
+          rapidScores={room.rapidShot?.scores}
+          boardPositions={room.boardPositions}
+        />
+        {advanceError && <div className="rounded-2xl border-2 border-[#ff8c4d] bg-[#fff3c4] px-4 py-3 text-sm font-black text-[#18233f]">{advanceError}</div>}
+        {room.phase === 'rapid-shot' && (() => {
+          const rq = RAPID_QUESTIONS[room.rapidShot?.questionIndex || 0];
+          const revealed = Boolean(room.rapidShot?.revealed);
+          return <PresentationQuestion
+            eyebrow={`Rapid Shot ${(room.rapidShot?.questionIndex || 0) + 1}/${RAPID_QUESTIONS.length}`}
+            questionText={rq?.text}
+            choices={rq?.choices}
+            revealed={revealed}
+            correctIndex={rq?.answerIndex}
+            answeredLabel={revealed ? 'Correct answer revealed — next in a moment…' : `Submitted ${Object.keys(room.rapidShot?.submitted || {}).length}/${activePlayers.length}`}
+            footer={<button onClick={advanceRapid} disabled={revealed} className="mx-auto mt-6 block w-full max-w-md rounded-xl bg-[#4d79ff] px-4 py-3 font-display text-[13px] text-white shadow-[0_4px_0_rgba(0,0,0,.18)] disabled:opacity-50">{revealed ? 'Revealing answer…' : `${(room.rapidShot?.questionIndex || 0) === RAPID_QUESTIONS.length - 1 ? 'Calculate Starting Order' : 'Next Question'} · ${rapidCountdown}s`}</button>}
+          />;
+        })()}
+        {room.phase === 'minigame' && (() => {
+          const index = room.minigame?.questionIndex || 0;
+          const total = (room.minigame?.questionIds || []).length;
+          const question = MINIGAME_QUESTIONS.find((item) => item.id === room.minigame?.questionIds?.[index]);
+          const revealed = Boolean(room.minigame?.revealed);
+          const answered = activePlayers.filter((player) => room.minigame?.submitted?.[player.id]?.[index]).length;
+          return <PresentationQuestion
+            eyebrow={`Round Break · ${room.minigame?.label} · Q${index + 1}/${total}`}
+            questionText={question?.text}
+            choices={question?.choices}
+            revealed={revealed}
+            correctIndex={question?.answerIndex}
+            answeredLabel={revealed ? 'Correct answer revealed — next in a moment…' : `Answered ${answered}/${activePlayers.length}`}
+            footer={<button onClick={advanceMinigameRef.current} disabled={revealed} className="mx-auto mt-6 block w-full max-w-md rounded-xl bg-[#4d79ff] px-4 py-3 font-display text-[13px] text-white shadow-[0_4px_0_rgba(0,0,0,.18)] disabled:opacity-50">{revealed ? 'Revealing answer…' : `${index === total - 1 ? 'Resolve Round' : 'Next Question'} · ${miniCountdown}s`}</button>}
+          />;
+        })()}
+      </main>
+    ) : (
+      <main className="mx-auto grid max-w-[1520px] items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <section><Board boardPositions={room.boardPositions} players={players} /></section>
         <aside>
           {advanceError && <div className="mb-4 rounded-2xl border-2 border-[#ff8c4d] bg-[#fff3c4] px-4 py-3 text-sm font-black text-[#18233f]">{advanceError}</div>}
-        {room.phase === 'board' && <section className="mb-4 rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]"><h2 className="mb-3 font-display text-base">This Turn</h2><div className="flex items-center gap-3"><Dice rolling={Boolean(room.rolling?.playerId)} value={room.lastRoll?.value || 1} /><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-[#ff8c4d]">{room.rolling?.playerId ? 'Rolling now' : 'Up next'}</p><p className="text-base font-black">{players[activeId]?.name || '—'}</p><p className="text-xs font-extrabold text-[#7a8395]">{room.lastRoll?.value ? `Rolled ${room.lastRoll.value}` : ''}</p></div></div></section>}
+          {room.phase === 'board' && <section className="mb-4 rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]"><h2 className="mb-3 font-display text-base">This Turn</h2><div className="flex items-center gap-3"><Dice rolling={Boolean(room.rolling?.playerId)} value={room.lastRoll?.value || 1} /><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-[#ff8c4d]">{room.rolling?.playerId ? 'Rolling now' : 'Up next'}</p><p className="text-base font-black">{players[activeId]?.name || '—'}</p><p className="text-xs font-extrabold text-[#7a8395]">{room.lastRoll?.value ? `Rolled ${room.lastRoll.value}` : ''}</p></div></div></section>}
 
-        <section className="mb-4 rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]"><div className="mb-2 flex items-center justify-between"><h2 className="font-display text-base">Players</h2><span className="text-[13px] font-black text-[#ff8c4d]">{activePlayers.length}/6</span></div>{playerSlots.map((player, index) => <PlayerRow key={player.id} player={player} index={index} started={hasStarted} position={room.boardPositions?.[player.id]} />)}</section>
+          <section className="mb-4 rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]"><div className="mb-2 flex items-center justify-between"><h2 className="font-display text-base">Players</h2><span className="text-[13px] font-black text-[#ff8c4d]">{activePlayers.length}/6</span></div>{playerSlots.map((player, index) => <PlayerRow key={player.id} player={player} index={index} started={hasStarted} position={room.boardPositions?.[player.id]} />)}</section>
 
-        <section className="mb-4 rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]"><h2 className="mb-2 font-display text-base">Leaderboard</h2><Leaderboard rankings={hasStarted ? rankings : []} players={players} boardPositions={room.boardPositions} /></section>
+          <section className="mb-4 rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]"><h2 className="mb-2 font-display text-base">Leaderboard</h2><Leaderboard rankings={hasStarted ? rankings : []} players={players} boardPositions={room.boardPositions} /></section>
 
-        <section className="rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]">
-          {room.phase === 'lobby' && <><p className="mb-3 text-center text-[11.5px] font-extrabold text-[#7a8395]">{activePlayers.length === 0 ? 'Waiting for player accounts to log in.' : `${activePlayers.length} player${activePlayers.length > 1 ? 's' : ''} connected.`}</p><button disabled={activePlayers.length === 0} onClick={startRapid} className="w-full rounded-xl bg-[#45f27b] px-4 py-3 font-display text-[13px] shadow-[0_4px_0_rgba(0,0,0,.18)] disabled:bg-[#e4dfc9] disabled:text-[#a39c85] disabled:shadow-none">Start 3 Rapid Shots {activePlayers.length > 0 ? `(${activePlayers.length} Player${activePlayers.length > 1 ? 's' : ''})` : ''}</button></>}
-          {room.phase === 'rapid-shot' && (() => {
-            const rq = RAPID_QUESTIONS[room.rapidShot?.questionIndex || 0];
-            const revealed = Boolean(room.rapidShot?.revealed);
-            return <><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#ff8c4d]">Rapid Shot {(room.rapidShot?.questionIndex || 0) + 1}/3</p><h2 className="my-2 font-display text-lg">{rq?.text}</h2><div className="my-3 grid grid-cols-2 gap-2">{rq?.choices?.map((choice, index) => <div key={choice} className={`rounded-xl border-2 p-2 text-xs font-bold ${revealed && index === rq.answerIndex ? 'border-[#3cae61] bg-[#dff8e7] text-[#1c6b3a]' : 'border-[#18233f]/10 bg-[#f8f5eb] text-[#18233f]'}`}><span className="mr-1 font-black text-[#ff8c4d]">{['A', 'B', 'C', 'D'][index]}.</span>{choice}{revealed && index === rq.answerIndex ? ' ✅' : ''}</div>)}</div><p className="mb-3 text-xs font-extrabold text-[#7a8395]">{revealed ? 'Correct answer revealed — next in a moment…' : `Submitted ${Object.keys(room.rapidShot?.submitted || {}).length}/${activePlayers.length}`}</p><button onClick={advanceRapid} disabled={revealed} className="w-full rounded-xl bg-[#4d79ff] px-4 py-3 font-display text-[13px] text-white shadow-[0_4px_0_rgba(0,0,0,.18)] disabled:opacity-50">{revealed ? 'Revealing answer…' : `${room.rapidShot?.questionIndex === 2 ? 'Calculate Starting Order' : 'Next Question'} · ${rapidCountdown}s`}</button></>;
-          })()}
-          {room.phase === 'order-reveal' && <><h2 className="mb-3 font-display text-lg">Starting Order</h2>{room.turnOrder.map((id, index) => <div key={id} className="flex justify-between border-b border-[#18233f]/10 py-2 text-sm font-bold"><span>#{index + 1} {players[id]?.name}</span><span>{room.rapidShot?.scores?.[id] || 0}</span></div>)}<button onClick={beginBoard} className="mt-4 w-full rounded-xl bg-[#45f27b] px-4 py-3 font-display text-[13px] shadow-[0_4px_0_rgba(0,0,0,.18)]">Start Board Now · {orderCountdown}s</button></>}
-          {room.phase === 'board' && <><p className="mb-3 text-center text-[11.5px] font-extrabold text-[#7a8395]">{room.rolling?.playerId ? `${players[room.rolling.playerId]?.name || 'Player'} is rolling…` : room.lastRoll ? 'Advancing to the next player…' : `Waiting for ${players[activeId]?.name || 'the active player'} to roll.`}</p><button onClick={forceNextTurn} disabled={!activeId} className="w-full rounded-xl border-2 border-[#18233f]/15 bg-transparent px-4 py-2.5 font-display text-[12px] text-[#7a8395] disabled:opacity-40">Force Next Turn ⏭</button></>}
-          {room.phase === 'challenge' && <div className="text-center"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#4d79ff]">Challenge Tile</p><h2 className="mt-2 font-display text-xl">{players[room.challenge?.teamId]?.name}</h2><p className="mt-3 text-sm font-bold text-[#7a8395]">{activeChallenge?.prompt}</p><p className="mt-4 text-xs font-black text-[#ff8c4d]">They answer on their device · Correct +{challengeContent.winTiles}, wrong −{challengeContent.loseTiles} to checkpoint</p></div>}
-          {room.phase === 'minigame' && (() => {
-            const index = room.minigame?.questionIndex || 0;
-            const total = (room.minigame?.questionIds || []).length;
-            const question = MINIGAME_QUESTIONS.find((item) => item.id === room.minigame?.questionIds?.[index]);
-            const revealed = Boolean(room.minigame?.revealed);
-            const answered = activePlayers.filter((player) => room.minigame?.submitted?.[player.id]?.[index]).length;
-            return <><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#ff8c4d]">Round Break · {room.minigame?.label} · Q{index + 1}/{total}</p><h2 className="my-2 font-display text-lg">{question?.text}</h2><div className="my-3 grid grid-cols-2 gap-2">{question?.choices?.map((choice, choiceIndex) => <div key={choice} className={`rounded-xl border-2 p-2 text-xs font-bold ${revealed && choiceIndex === question?.answerIndex ? 'border-[#3cae61] bg-[#dff8e7] text-[#1c6b3a]' : 'border-[#18233f]/10 bg-[#f8f5eb] text-[#18233f]'}`}><span className="mr-1 font-black text-[#ff8c4d]">{['A', 'B', 'C', 'D'][choiceIndex]}.</span>{choice}{revealed && choiceIndex === question?.answerIndex ? ' ✅' : ''}</div>)}</div><p className="mb-3 text-xs font-extrabold text-[#7a8395]">{revealed ? 'Correct answer revealed — next in a moment…' : `Answered ${answered}/${activePlayers.length}`}</p><button onClick={advanceMinigameRef.current} disabled={revealed} className="w-full rounded-xl bg-[#4d79ff] px-4 py-3 font-display text-[13px] text-white shadow-[0_4px_0_rgba(0,0,0,.18)] disabled:opacity-50">{revealed ? 'Revealing answer…' : `${index === total - 1 ? 'Resolve Round' : 'Next Question'} · ${miniCountdown}s`}</button></>;
-          })()}
-          {room.phase === 'finished' && <section className="rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]"><h2 className="mb-1 font-display text-xl">🏆 Final Results</h2><p className="mb-3 text-xs font-extrabold text-[#7a8395]">The race is complete — here's how the teams finished.</p><div className="space-y-2">{rankings.map((id, index) => { const player = players[id]; const color = TOKEN_COLORS[Math.max(0, Object.keys(players).sort().indexOf(id)) % TOKEN_COLORS.length]; const position = (room.boardPositions?.[id] || 0) + 1; const rank = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1; return <div key={id} className={`flex items-center gap-3 rounded-xl px-2 py-2 ${index === 0 ? 'bg-[#fff3c4]' : ''}`}><span className="w-7 text-center text-sm font-black text-[#ff8c4d]">{rank}</span>{player?.avatar ? <img src={player.avatar} alt={player.name} className="h-8 w-8 rounded-full border-2 border-[#18233f] object-cover" /> : <span className="h-5 w-5 rounded-[5px] border-2 border-[#18233f]" style={{ backgroundColor: color }} />}<span className="min-w-0 flex-1 truncate text-sm font-black">{player?.name || id}</span><span className="text-xs font-extrabold text-[#7a8395]">Tile {position}</span></div>; })}</div><button onClick={reset} className="mt-4 w-full rounded-xl bg-[#ff8c4d] px-4 py-3 font-display text-[13px] text-[#18233f] shadow-[0_4px_0_rgba(0,0,0,.18)]">Reset Game</button></section>}
-        </section>
-      </aside>
-    </main>
+          <section className="rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]">
+            {room.phase === 'lobby' && <><p className="mb-3 text-center text-[11.5px] font-extrabold text-[#7a8395]">{activePlayers.length === 0 ? 'Waiting for player accounts to log in.' : `${activePlayers.length} player${activePlayers.length > 1 ? 's' : ''} connected.`}</p><button disabled={activePlayers.length === 0} onClick={startRapid} className="w-full rounded-xl bg-[#45f27b] px-4 py-3 font-display text-[13px] shadow-[0_4px_0_rgba(0,0,0,.18)] disabled:bg-[#e4dfc9] disabled:text-[#a39c85] disabled:shadow-none">Start {RAPID_QUESTIONS.length} Rapid Shots {activePlayers.length > 0 ? `(${activePlayers.length} Player${activePlayers.length > 1 ? 's' : ''})` : ''}</button></>}
+            {room.phase === 'order-reveal' && <><h2 className="mb-3 font-display text-lg">Starting Order</h2>{room.turnOrder.map((id, index) => <div key={id} className="flex justify-between border-b border-[#18233f]/10 py-2 text-sm font-bold"><span>#{index + 1} {players[id]?.name}</span><span>{room.rapidShot?.scores?.[id] || 0}</span></div>)}<button onClick={beginBoard} className="mt-4 w-full rounded-xl bg-[#45f27b] px-4 py-3 font-display text-[13px] shadow-[0_4px_0_rgba(0,0,0,.18)]">Start Board Now · {orderCountdown}s</button></>}
+            {room.phase === 'board' && <><p className="mb-3 text-center text-[11.5px] font-extrabold text-[#7a8395]">{room.rolling?.playerId ? `${players[room.rolling.playerId]?.name || 'Player'} is rolling…` : room.lastRoll ? 'Advancing to the next player…' : `Waiting for ${players[activeId]?.name || 'the active player'} to roll.`}</p><button onClick={forceNextTurn} disabled={!activeId} className="w-full rounded-xl border-2 border-[#18233f]/15 bg-transparent px-4 py-2.5 font-display text-[12px] text-[#7a8395] disabled:opacity-40">Force Next Turn ⏭</button></>}
+            {room.phase === 'challenge' && <div className="text-center"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#4d79ff]">Challenge Tile</p><h2 className="mt-2 font-display text-xl">{players[room.challenge?.teamId]?.name}</h2><p className="mt-3 text-sm font-bold text-[#7a8395]">{activeChallenge?.prompt}</p><p className="mt-4 text-xs font-black text-[#ff8c4d]">They answer on their device · Correct +{challengeContent.winTiles}, wrong −{challengeContent.loseTiles} to checkpoint</p></div>}
+            {room.phase === 'finished' && <section className="rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]"><h2 className="mb-1 font-display text-xl">🏆 Final Results</h2><p className="mb-3 text-xs font-extrabold text-[#7a8395]">The race is complete — here's how the teams finished.</p><div className="space-y-2">{rankings.map((id, index) => { const player = players[id]; const color = TOKEN_COLORS[Math.max(0, Object.keys(players).sort().indexOf(id)) % TOKEN_COLORS.length]; const position = (room.boardPositions?.[id] || 0) + 1; const rank = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1; return <div key={id} className={`flex items-center gap-3 rounded-xl px-2 py-2 ${index === 0 ? 'bg-[#fff3c4]' : ''}`}><span className="w-7 text-center text-sm font-black text-[#ff8c4d]">{rank}</span>{player?.avatar ? <img src={player.avatar} alt={player.name} className="h-8 w-8 rounded-full border-2 border-[#18233f] object-cover" /> : <span className="h-5 w-5 rounded-[5px] border-2 border-[#18233f]" style={{ backgroundColor: color }} />}<span className="min-w-0 flex-1 truncate text-sm font-black">{player?.name || id}</span><span className="text-xs font-extrabold text-[#7a8395]">Tile {position}</span></div>; })}</div><button onClick={reset} className="mt-4 w-full rounded-xl bg-[#ff8c4d] px-4 py-3 font-display text-[13px] text-[#18233f] shadow-[0_4px_0_rgba(0,0,0,.18)]">Reset Game</button></section>}
+          </section>
+        </aside>
+      </main>
+    )}
   </div>;
 }

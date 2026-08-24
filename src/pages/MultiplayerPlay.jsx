@@ -182,7 +182,7 @@ export default function MultiplayerPlay() {
     </section>}
 
     {room.phase === 'rapid-shot' && <section className="mx-auto max-w-5xl">
-      <PhaseLabel step={`QUESTION ${(room.rapidShot?.questionIndex || 0) + 1} / 3`}>Rapid Shot</PhaseLabel>
+      <PhaseLabel step={`QUESTION ${(room.rapidShot?.questionIndex || 0) + 1} / ${RAPID_QUESTIONS.length}`}>Rapid Shot</PhaseLabel>
       <div className="rounded-3xl bg-white px-10 py-10 shadow-xl ring-1 ring-black/5">
         <h1 className="mx-auto max-w-4xl text-center text-4xl font-black leading-tight">{rapidQuestion?.text}</h1>
         <div className="mt-9 grid grid-cols-2 gap-5">
