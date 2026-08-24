@@ -92,12 +92,22 @@ export async function joinRoom(_unusedRoomCode, username, password) { return log
 export function subscribeToRoom(_roomCode, callback, onError) { return onSnapshot(gameRef(), (snapshot) => callback(snapshot.exists() ? { id: GAME_PATH, ...snapshot.data() } : null), onError); }
 export async function updateRoom(_roomCode, updates) { await updateDoc(gameRef(), { ...updates, updatedAt: serverTimestamp() }); }
 
-// Pick the next mini-game quiz question from a shuffle-bag so every question
-// appears exactly once per cycle (no repeats until the whole pool is used).
-// Returns both the chosen id and the updated bag to persist in game state.
-export function pickMinigameQuestion(bag, previousQuestionId) {
+// Pick the next mini-game streak: `count` distinct questions drawn from a
+// shuffle-bag so every question appears exactly once per cycle (no repeats
+// until the whole pool is used). The first draw avoids repeating the previous
+// round's final question. Returns the chosen ids and the updated bag to
+// persist in game state.
+export function pickMinigameQuestions(bag, previousQuestionId, count = 3) {
   const pool = MINIGAME_QUESTIONS.map((question) => question.id);
-  return drawFromBag(pool, bag, previousQuestionId);
+  const ids = [];
+  let currentBag = bag;
+  for (let i = 0; i < count; i += 1) {
+    const { id, bag: nextBag } = drawFromBag(pool, currentBag, i === 0 ? previousQuestionId : undefined);
+    if (!id) break;
+    ids.push(id);
+    currentBag = nextBag;
+  }
+  return { ids, bag: currentBag };
 }
 
 export async function submitMinigameAnswer(_roomCode, playerId, choiceIndex) {
@@ -107,10 +117,11 @@ export async function submitMinigameAnswer(_roomCode, playerId, choiceIndex) {
     if (!snapshot.exists()) throw new Error('Game is not initialized.');
     const game = snapshot.data();
     if (game.phase !== 'minigame') throw new Error('No mini-game in progress.');
-    if (game.minigame?.submitted?.[playerId]) return;
+    const index = game.minigame?.questionIndex || 0;
+    if (game.minigame?.submitted?.[playerId]?.[index]) return;
     transaction.update(ref, {
-      [`minigame.answers.${playerId}`]: { choiceIndex: Number(choiceIndex), answeredAt: serverTimestamp() },
-      [`minigame.submitted.${playerId}`]: true,
+      [`minigame.answers.${playerId}.${index}`]: { choiceIndex: Number(choiceIndex), answeredAt: serverTimestamp() },
+      [`minigame.submitted.${playerId}.${index}`]: true,
       updatedAt: serverTimestamp(),
     });
   });

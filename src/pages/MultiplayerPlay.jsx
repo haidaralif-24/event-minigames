@@ -122,8 +122,10 @@ export default function MultiplayerPlay() {
   const rapidQuestion = RAPID_QUESTIONS[room.rapidShot?.questionIndex || 0];
   const submitted = Boolean(room.rapidShot?.submitted?.[session.playerId]);
   const challengeQuestion = challengeContent.questions.find((question) => question.id === room?.challenge?.questionId);
-  const minigameQuestion = MINIGAME_QUESTIONS.find((question) => question.id === room.minigame?.questionId);
-  const miniSubmitted = Boolean(room.minigame?.submitted?.[session.playerId]);
+  const minigameIndex = room.minigame?.questionIndex || 0;
+  const minigameQuestion = MINIGAME_QUESTIONS.find((question) => question.id === room.minigame?.questionIds?.[minigameIndex]);
+  const miniSubmitted = Boolean(room.minigame?.submitted?.[session.playerId]?.[minigameIndex]);
+  const miniAnswer = room.minigame?.answers?.[session.playerId]?.[minigameIndex];
   const rankings = getRankings(room, players);
   const placements = room.winner ? [room.winner, ...rankings.filter((id) => id !== room.winner)].slice(0, 3) : rankings.slice(0, 3);
 
@@ -216,15 +218,15 @@ export default function MultiplayerPlay() {
     </section>}
 
     {room.phase === 'minigame' && <section className="mx-auto max-w-5xl">
-      <PhaseLabel step="ROUND BREAK">Mini-game</PhaseLabel>
+      <PhaseLabel step={`QUESTION ${minigameIndex + 1} / ${(room.minigame?.questionIds || []).length}`}>Mini-game</PhaseLabel>
       <div className="rounded-3xl bg-white px-10 py-10 shadow-xl ring-1 ring-black/5">
         <p className="text-center text-[11px] font-black uppercase tracking-[.16em] text-[#ff8c4d]">{room.minigame?.label}</p>
         <h1 className="mx-auto mt-1 max-w-4xl text-center text-4xl font-black leading-tight">{minigameQuestion?.text}</h1>
         <div className="mt-9 grid grid-cols-2 gap-5">
-          {minigameQuestion?.choices?.map((choice, index) => <AnswerButton key={choice} choice={choice} index={index} selected={miniSubmitted && room.minigame?.answers?.[session.playerId]?.choiceIndex === index} disabled={miniSubmitted || busy} onClick={() => sendMinigame(index)} />)}
+          {minigameQuestion?.choices?.map((choice, index) => <AnswerButton key={choice} choice={choice} index={index} selected={miniSubmitted && miniAnswer?.choiceIndex === index} disabled={miniSubmitted || busy} onClick={() => sendMinigame(index)} />)}
         </div>
         <div className="mt-7 min-h-8 text-center font-black text-[#4d79ff]">{miniSubmitted ? '✓ Answer locked. Waiting for the other players…' : message}</div>
-        {miniSubmitted && <AnswerReveal question={minigameQuestion} playerChoiceIndex={room.minigame?.answers?.[session.playerId]?.choiceIndex} correct={room.minigame?.answers?.[session.playerId]?.choiceIndex === minigameQuestion?.answerIndex} label="Round Break · Answer" />}
+        {miniSubmitted && <AnswerReveal question={minigameQuestion} playerChoiceIndex={miniAnswer?.choiceIndex} correct={miniAnswer?.choiceIndex === minigameQuestion?.answerIndex} label="Round Break · Answer" />}
       </div>
     </section>}
 
