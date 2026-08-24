@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import Board from '../components/MultiplayerBoard.jsx';
 import Dice from '../components/Dice.jsx';
 import { useRoom } from '../hooks/useRoom.js';
@@ -205,6 +206,7 @@ export default function MultiplayerHost() {
   if (loading) return <div className="grid min-h-screen place-items-center bg-[#0e1a3a] text-white">Loading game…</div>;
   if (error || !room) return <div className="grid min-h-screen place-items-center bg-[#0e1a3a] text-red-300">Game unavailable. Ask a player to log in first.</div>;
   if (session?.role !== 'host') return <div className="grid min-h-screen place-items-center bg-[#0e1a3a] text-red-300">Host login required.</div>;
+  if (room.phase === 'finished') return <Navigate to="/podium" replace />;
 
   const players = room.players || {};
   const sortedPlayers = Object.values(players).sort((a, b) => a.id.localeCompare(b.id));

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import Dice from '../components/Dice.jsx';
 import { useRoom } from '../hooks/useRoom.js';
-import { beginRoll, markPlayerConnected, markPlayerDisconnected, rollForActivePlayer, submitChallengeChoice, submitMinigameAnswer, submitRapidAnswer, updateRoom } from '../services/roomService.js';
+import { beginRoll, markPlayerConnected, markPlayerDisconnected, rollForActivePlayer, submitChallengeChoice, submitMinigameAnswer, submitRapidAnswer, updateRoom, MINIGAME_QUESTIONS } from '../services/roomService.js';
 
 // Keep in sync with the animation feel in Dice.jsx — this is how long the
 // dice visibly rolls for everyone (host, board, other players) before the
@@ -113,6 +114,7 @@ export default function MultiplayerPlay() {
 
   if (loading) return <div className="grid h-screen place-items-center bg-[#f4f4f7] text-xl font-black">Connecting…</div>;
   if (error || !room) return <div className="grid h-screen place-items-center bg-[#f4f4f7] text-xl font-black text-red-600">Game unavailable.</div>;
+  if (room.phase === 'finished') return <Navigate to="/podium" replace />;
 
   const players = room.players || {};
   const me = players[session.playerId];

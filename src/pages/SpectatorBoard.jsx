@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import MultiplayerBoard from '../components/MultiplayerBoard.jsx';
 import { db, ensureAnonymousAuth } from '../firebase.js';
@@ -15,5 +16,6 @@ export default function SpectatorBoard() {
   }, []);
   if (error) return <div className="grid min-h-screen place-items-center bg-[#0e1a3a] text-white">{error}</div>;
   if (!room) return <div className="grid min-h-screen place-items-center bg-[#0e1a3a] text-white">Loading board…</div>;
+  if (room.phase === 'finished') return <Navigate to="/podium" replace />;
   return <main className="min-h-screen bg-[#0e1a3a] p-3"><MultiplayerBoard boardPositions={room.boardPositions} players={room.players} /></main>;
 }
