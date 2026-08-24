@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Navigate } from 'react-router-dom';
 import Board from '../components/MultiplayerBoard.jsx';
 import Dice from '../components/Dice.jsx';
 import { useRoom } from '../hooks/useRoom.js';
@@ -206,7 +205,6 @@ export default function MultiplayerHost() {
   if (loading) return <div className="grid min-h-screen place-items-center bg-[#0e1a3a] text-white">Loading game…</div>;
   if (error || !room) return <div className="grid min-h-screen place-items-center bg-[#0e1a3a] text-red-300">Game unavailable. Ask a player to log in first.</div>;
   if (session?.role !== 'host') return <div className="grid min-h-screen place-items-center bg-[#0e1a3a] text-red-300">Host login required.</div>;
-  if (room.phase === 'finished') return <Navigate to="/podium" replace />;
 
   const players = room.players || {};
   const sortedPlayers = Object.values(players).sort((a, b) => a.id.localeCompare(b.id));
@@ -389,7 +387,7 @@ export default function MultiplayerHost() {
             const answered = activePlayers.filter((player) => room.minigame?.submitted?.[player.id]).length;
             return <><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#ff8c4d]">Round Break · {room.minigame?.label}</p><h2 className="my-2 font-display text-lg">{question?.text}</h2><div className="my-3 grid grid-cols-2 gap-2">{question?.choices?.map((choice, index) => <div key={choice} className="rounded-xl border-2 border-[#18233f]/10 bg-[#f8f5eb] p-2 text-xs font-bold"><span className="mr-1 font-black text-[#ff8c4d]">{['A', 'B', 'C', 'D'][index]}.</span>{choice}</div>)}</div><p className="mb-3 text-xs font-extrabold text-[#7a8395]">Answered {answered}/{activePlayers.length}</p><button onClick={resolveMinigameRef.current} className="w-full rounded-xl bg-[#4d79ff] px-4 py-3 font-display text-[13px] text-white shadow-[0_4px_0_rgba(0,0,0,.18)]">Resolve Now · {miniCountdown}s</button></>;
           })()}
-          {room.phase === 'finished' && <div className="text-center"><div className="mb-1 text-5xl">🏆</div><h2 className="mb-3 font-display text-2xl text-[#ff5555]">Final Results</h2><FinishPodium placementIds={finishPlacements} players={players} boardPositions={room.boardPositions} /><p className="mt-3 text-xs font-bold text-[#7a8395]">Places two and three are ranked by their current tile position.</p></div>}
+          {room.phase === 'finished' && <section className="rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]"><h2 className="mb-1 font-display text-xl">🏆 Final Results</h2><p className="mb-3 text-xs font-extrabold text-[#7a8395]">The race is complete — here's how the teams finished.</p><div className="space-y-2">{rankings.map((id, index) => { const player = players[id]; const color = TOKEN_COLORS[Math.max(0, Object.keys(players).sort().indexOf(id)) % TOKEN_COLORS.length]; const position = (room.boardPositions?.[id] || 0) + 1; const rank = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1; return <div key={id} className={`flex items-center gap-3 rounded-xl px-2 py-2 ${index === 0 ? 'bg-[#fff3c4]' : ''}`}><span className="w-7 text-center text-sm font-black text-[#ff8c4d]">{rank}</span>{player?.avatar ? <img src={player.avatar} alt={player.name} className="h-8 w-8 rounded-full border-2 border-[#18233f] object-cover" /> : <span className="h-5 w-5 rounded-[5px] border-2 border-[#18233f]" style={{ backgroundColor: color }} />}<span className="min-w-0 flex-1 truncate text-sm font-black">{player?.name || id}</span><span className="text-xs font-extrabold text-[#7a8395]">Tile {position}</span></div>; })}</div><button onClick={reset} className="mt-4 w-full rounded-xl bg-[#ff8c4d] px-4 py-3 font-display text-[13px] text-[#18233f] shadow-[0_4px_0_rgba(0,0,0,.18)]">Reset Game</button></section>}
         </section>
       </aside>
     </main>
