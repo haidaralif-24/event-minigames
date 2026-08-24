@@ -162,6 +162,10 @@ export async function beginRoll(playerId) {
     const activePlayerId = game.turnOrder?.[game.activePlayerIndex ?? 0];
     if (game.phase !== 'board' || activePlayerId !== playerId) throw new Error('It is not your turn to roll.');
     if (game.rolling?.playerId) throw new Error('A roll is already in progress.');
+    // Block a same-turn double roll: after the active player has already rolled
+    // (lastRoll.playerId set) but the turn hasn't auto-advanced yet (~2.2s
+    // window), a second roll would move them again and skip the next team.
+    if (game.lastRoll?.playerId === playerId) throw new Error('You already rolled this turn — wait for the next player.');
     transaction.update(gameRef(), { rolling: { playerId, startedAt: serverTimestamp() }, lastRoll: null, updatedAt: serverTimestamp() });
   });
 }
@@ -235,6 +239,10 @@ export async function submitChallengeChoice(playerId, choiceIndex) {
     transaction.update(gameRef(), {
       boardPositions,
       playerCheckpoints,
+      // Carry the resolved finalPosition into lastRoll so the host auto-advance
+      // key is stable for challenge turns (it reads lastRoll.finalPosition ??
+      // lastRoll.landedPosition) and the turn advances exactly once.
+      lastRoll: { ...(game.lastRoll || {}), playerId, finalPosition },
       challenge: { ...challenge, resolved: true, correct, choiceIndex: Number(choiceIndex), finalPosition, answeredAt: serverTimestamp() },
       lastChallenge: { playerId, correct, move, finalPosition },
       phase: finalPosition >= boardTiles.length - 1 ? 'finished' : 'board',

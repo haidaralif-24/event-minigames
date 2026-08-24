@@ -274,10 +274,23 @@ export default function MultiplayerHost() {
     const g = roomRef.current;
     if (!g || g.winner || !g.turnOrder?.length) return;
     const players = g.players || {};
-    const activeId = getActivePlayerId(g);
-    const order = g.turnOrder.filter((id) => players[id]?.connected !== false);
-    const current = order.indexOf(activeId);
-    if (current < 0 || current >= order.length - 1) {
+    const order = g.turnOrder;
+    const total = order.length;
+    const currentIndex = Math.min(total - 1, Math.max(0, g.activePlayerIndex ?? 0));
+    // Walk forward (wrapping) to the next *connected* player so a disconnected
+    // team is skipped rather than breaking advancement. The previous version
+    // filtered the order by `connected` then looked up the active player in
+    // that filtered list — when the active player was disconnected, indexOf
+    // returned -1 and the game wrongly dropped into the end-of-round minigame
+    // (resetting activePlayerIndex to 0), which bounced every turn back to team
+    // 1 and froze turns 2–6.
+    let nextIndex = -1;
+    for (let step = 1; step <= total; step += 1) {
+      const candidate = (currentIndex + step) % total;
+      if (players[order[candidate]]?.connected !== false) { nextIndex = candidate; break; }
+    }
+    if (nextIndex === -1) nextIndex = currentIndex; // no other connected player
+    if (nextIndex <= currentIndex) {
       console.log(`[host] nextTurn → entering 'minigame' (round ${g.round || 1}, previous type: ${g.minigame?.type || 'none'})`);
       const options = MINI_GAMES.filter((game) => game.id !== g.minigame?.type);
       const game = (options.length ? options : MINI_GAMES)[Math.floor(Math.random() * (options.length ? options.length : MINI_GAMES.length))];
@@ -291,7 +304,6 @@ export default function MultiplayerHost() {
         },
       }));
     }
-    const nextIndex = g.turnOrder.indexOf(order[current + 1]);
     console.log(`[host] nextTurn → advancing to player index ${nextIndex} (round ${g.round || 1})`);
     return safeUpdate('Advance turn', () => update({ activePlayerIndex: nextIndex, lastRoll: null }));
   };
