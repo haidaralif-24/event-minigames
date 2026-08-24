@@ -3,10 +3,11 @@ import Board from '../components/MultiplayerBoard.jsx';
 import Dice from '../components/Dice.jsx';
 import { useRoom } from '../hooks/useRoom.js';
 import { getActivePlayerId, getRankings, resolveRapidShotOrder, RAPID_QUESTIONS } from '../services/gameLogic.js';
-import { resetGame, updateRoom } from '../services/roomService.js';
+import { resetGame, updateRoom, pickMinigameQuestion } from '../services/roomService.js';
 import { TOKEN_COLORS, ACTIVE_META, MINI_GAMES } from '../data/constants.js';
 import { PLAYER_ACCOUNTS } from '../data/loginAccounts.js';
 import challengeContent from '../content/maulid-nabi/challenge.json';
+import minigameQuestions from '../content/maulid-nabi/minigameQuestions.json';
 import boardTiles from '../data/boardTiles.json';
 
 const TOTAL_TILES = boardTiles.length;
@@ -100,6 +101,7 @@ export default function MultiplayerHost() {
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
   const [rapidCountdown, setRapidCountdown] = useState(5);
   const [orderCountdown, setOrderCountdown] = useState(5);
+  const [miniCountdown, setMiniCountdown] = useState(12);
 
   // These refs let effects below always call the *latest* handler (defined
   // further down, after the early returns) without needing to restart their
@@ -109,6 +111,8 @@ export default function MultiplayerHost() {
   const advanceRapidRef = useRef(() => {});
   const beginBoardRef = useRef(() => {});
   const nextTurnRef = useRef(() => {});
+  const resolveMinigameRef = useRef(() => {});
+  const minigameResolvedRef = useRef(false);
   const handledRollRef = useRef(null);
   const autoAdvanceTimeoutRef = useRef(null);
 
@@ -136,6 +140,29 @@ export default function MultiplayerHost() {
     const advance = setTimeout(() => beginBoardRef.current(), 5000);
     return () => { clearInterval(tick); clearTimeout(advance); };
   }, [room?.phase]);
+
+  // Mini-game round break: count down the chosen game's timeLimit, then
+  // resolve the round into a new turn order. Resets the one-shot resolve
+  // guard whenever a fresh mini-game question begins.
+  useEffect(() => {
+    if (room?.phase !== 'minigame') return undefined;
+    minigameResolvedRef.current = false;
+    const game = MINI_GAMES.find((item) => item.id === room.minigame?.type) || { timeLimit: 12 };
+    setMiniCountdown(game.timeLimit);
+    const tick = setInterval(() => setMiniCountdown((seconds) => Math.max(0, seconds - 1)), 1000);
+    const advance = setTimeout(() => resolveMinigameRef.current(), game.timeLimit * 1000);
+    return () => { clearInterval(tick); clearTimeout(advance); };
+  }, [room?.phase, room?.minigame?.questionId]);
+
+  // Resolve the moment every active player has submitted an answer, so the
+  // round doesn't wait out the full timer when nobody's left to answer.
+  useEffect(() => {
+    if (room?.phase !== 'minigame') return undefined;
+    const activeIds = Object.values(room.players || {}).filter((player) => player.connected !== false).map((player) => player.id);
+    const submittedCount = activeIds.filter((id) => room.minigame?.submitted?.[id]).length;
+    if (activeIds.length > 0 && submittedCount >= activeIds.length) resolveMinigameRef.current();
+    return undefined;
+  }, [room?.phase, room?.minigame?.submitted, room?.minigame?.questionId, room?.players]);
 
   // Auto-advance turns on the board once a roll (and any tile effect, e.g. a
   // challenge) has resolved, so the host never has to click "Next Player".
@@ -205,18 +232,33 @@ export default function MultiplayerHost() {
     if (current < 0 || current >= order.length - 1) {
       const options = MINI_GAMES.filter((game) => game.id !== room.minigame?.type);
       const game = (options.length ? options : MINI_GAMES)[Math.floor(Math.random() * (options.length ? options.length : MINI_GAMES.length))];
-      return update({ phase: 'minigame', minigame: { type: game.id, label: game.label, description: game.description, results: {}, startedAt: Date.now() } });
+      const question = pickMinigameQuestion(room.minigame?.questionId);
+      return update({
+        phase: 'minigame',
+        minigame: {
+          type: game.id, label: game.label, description: game.description,
+          questionId: question.id, answers: {}, submitted: {},
+          startedAt: Date.now(),
+        },
+      });
     }
     return update({ activePlayerIndex: room.turnOrder.indexOf(order[current + 1]), lastRoll: null });
   };
-  const recordResult = async (id) => {
-    const results = { ...(room.minigame?.results || {}) };
-    if (results[id]) return;
-    results[id] = Object.keys(results).length + 1;
-    if (Object.keys(results).length >= activePlayers.length) {
-      const turnOrder = Object.entries(results).sort((a, b) => a[1] - b[1]).map(([playerId]) => playerId);
-      await update({ phase: 'board', round: (room.round || 1) + 1, turnOrder, activePlayerIndex: 0, lastRoll: null, minigame: { ...room.minigame, results } });
-    } else await update({ 'minigame.results': results });
+  const resolveMinigame = async () => {
+    if (minigameResolvedRef.current) return;
+    if (room.phase !== 'minigame') return;
+    const question = minigameQuestions.find((item) => item.id === room.minigame?.questionId);
+    minigameResolvedRef.current = true;
+    const ranking = [...activePlayers.map((player) => player.id)].sort((a, b) => {
+      const aCorrect = room.minigame?.answers?.[a]?.choiceIndex === question?.answerIndex;
+      const bCorrect = room.minigame?.answers?.[b]?.choiceIndex === question?.answerIndex;
+      if (aCorrect !== bCorrect) return aCorrect ? -1 : 1;
+      const aTime = room.minigame?.answers?.[a]?.answeredAt ?? Infinity;
+      const bTime = room.minigame?.answers?.[b]?.answeredAt ?? Infinity;
+      return aTime - bTime;
+    });
+    const results = Object.fromEntries(ranking.map((id, index) => [id, index + 1]));
+    await update({ phase: 'board', round: (room.round || 1) + 1, turnOrder: ranking, activePlayerIndex: 0, lastRoll: null, rolling: null, minigame: { ...room.minigame, results } });
   };
   const reset = async () => {
     if (!window.confirm('Reset the entire game and return everyone to the login lobby?')) return;
@@ -238,6 +280,7 @@ export default function MultiplayerHost() {
   advanceRapidRef.current = advanceRapid;
   beginBoardRef.current = beginBoard;
   nextTurnRef.current = nextTurn;
+  resolveMinigameRef.current = resolveMinigame;
 
   // Manual safety-net for the host (per AGENTS.md: host can force-advance if
   // a player is stuck/disconnected). Cancels any pending auto-advance first
@@ -268,7 +311,11 @@ export default function MultiplayerHost() {
           {room.phase === 'order-reveal' && <><h2 className="mb-3 font-display text-lg">Starting Order</h2>{room.turnOrder.map((id, index) => <div key={id} className="flex justify-between border-b border-[#18233f]/10 py-2 text-sm font-bold"><span>#{index + 1} {players[id]?.name}</span><span>{room.rapidShot?.scores?.[id] || 0}</span></div>)}<button onClick={beginBoard} className="mt-4 w-full rounded-xl bg-[#45f27b] px-4 py-3 font-display text-[13px] shadow-[0_4px_0_rgba(0,0,0,.18)]">Start Board Now · {orderCountdown}s</button></>}
           {room.phase === 'board' && <><p className="mb-3 text-center text-[11.5px] font-extrabold text-[#7a8395]">{room.rolling?.playerId ? `${players[room.rolling.playerId]?.name || 'Player'} is rolling…` : room.lastRoll ? 'Advancing to the next player…' : `Waiting for ${players[activeId]?.name || 'the active player'} to roll.`}</p><button onClick={forceNextTurn} disabled={!activeId} className="w-full rounded-xl border-2 border-[#18233f]/15 bg-transparent px-4 py-2.5 font-display text-[12px] text-[#7a8395] disabled:opacity-40">Force Next Turn ⏭</button></>}
           {room.phase === 'challenge' && <div className="text-center"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#4d79ff]">Challenge Tile</p><h2 className="mt-2 font-display text-xl">{players[room.challenge?.teamId]?.name}</h2><p className="mt-3 text-sm font-bold text-[#7a8395]">{activeChallenge?.prompt}</p><p className="mt-4 text-xs font-black text-[#ff8c4d]">They answer on their device · Correct +{challengeContent.winTiles}, wrong −{challengeContent.loseTiles} to checkpoint</p></div>}
-          {room.phase === 'minigame' && <><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#ff8c4d]">Random Mini-game</p><h2 className="mt-1 font-display text-lg">{room.minigame?.label}</h2><p className="my-2 text-xs font-bold text-[#7a8395]">{room.minigame?.description}</p>{activePlayers.map((player) => <button key={player.id} disabled={Boolean(room.minigame?.results?.[player.id])} onClick={() => recordResult(player.id)} className="mb-2 flex w-full justify-between rounded-xl bg-[#18233f] px-3 py-2.5 text-sm font-black text-white disabled:opacity-40"><span>{player.name}</span><span>{room.minigame?.results?.[player.id] || '—'}</span></button>)}</>}
+          {room.phase === 'minigame' && (() => {
+            const question = minigameQuestions.find((item) => item.id === room.minigame?.questionId);
+            const answered = activePlayers.filter((player) => room.minigame?.submitted?.[player.id]).length;
+            return <><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#ff8c4d]">Round Break · {room.minigame?.label}</p><h2 className="my-2 font-display text-lg">{question?.text}</h2><div className="my-3 grid grid-cols-2 gap-2">{question?.choices?.map((choice, index) => <div key={choice} className="rounded-xl border-2 border-[#18233f]/10 bg-[#f8f5eb] p-2 text-xs font-bold"><span className="mr-1 font-black text-[#ff8c4d]">{['A', 'B', 'C', 'D'][index]}.</span>{choice}</div>)}</div><p className="mb-3 text-xs font-extrabold text-[#7a8395]">Answered {answered}/{activePlayers.length}</p><button onClick={resolveMinigameRef.current} className="w-full rounded-xl bg-[#4d79ff] px-4 py-3 font-display text-[13px] text-white shadow-[0_4px_0_rgba(0,0,0,.18)]">Resolve Now · {miniCountdown}s</button></>;
+          })()}
           {room.phase === 'finished' && <div className="text-center"><div className="mb-1 text-5xl">🏆</div><h2 className="mb-3 font-display text-2xl text-[#ff5555]">Final Results</h2><FinishPodium placementIds={finishPlacements} players={players} boardPositions={room.boardPositions} /><p className="mt-3 text-xs font-bold text-[#7a8395]">Places two and three are ranked by their current tile position.</p></div>}
         </section>
       </aside>

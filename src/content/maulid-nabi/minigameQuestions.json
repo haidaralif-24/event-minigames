@@ -1,0 +1,14 @@
+[
+  { "id": "qm1", "text": "Who is the central figure celebrated during Maulid Nabi?", "choices": ["Prophet Muhammad", "Prophet Musa", "Prophet Isa", "Prophet Ibrahim"], "answerIndex": 0 },
+  { "id": "qm2", "text": "In which city was Prophet Muhammad born?", "choices": ["Mecca", "Medina", "Jerusalem", "Baghdad"], "answerIndex": 0 },
+  { "id": "qm3", "text": "What is the holy book revealed to Prophet Muhammad?", "choices": ["Torah", "Quran", "Psalms", "Gospel"], "answerIndex": 1 },
+  { "id": "qm4", "text": "How many pillars of Islam are there?", "choices": ["3", "4", "5", "6"], "answerIndex": 2 },
+  { "id": "qm5", "text": "What is the night journey of the Prophet called?", "choices": ["Isra and Mi'raj", "Hijra", "Hajj", "Laylat al-Qadr"], "answerIndex": 0 },
+  { "id": "qm6", "text": "Which direction do Muslims face when praying?", "choices": ["Toward Jerusalem", "Toward Medina", "Toward the East", "Toward the Kaaba in Mecca"], "answerIndex": 3 },
+  { "id": "qm7", "text": "What is the name of the fasting month in Islam?", "choices": ["Shawwal", "Ramadan", "Safar", "Rajab"], "answerIndex": 1 },
+  { "id": "qm8", "text": "Who was the first caliph after Prophet Muhammad?", "choices": ["Abu Bakr", "Umar", "Ali", "Uthman"], "answerIndex": 0 },
+  { "id": "qm9", "text": "What is the obligatory charity to the poor called?", "choices": ["Sadaqah", "Khums", "Zakat", "Fitrah"], "answerIndex": 2 },
+  { "id": "qm10", "text": "How many daily prayers are required in Islam?", "choices": ["Three", "Five", "Seven", "Two"], "answerIndex": 1 },
+  { "id": "qm11", "text": "What is the Arabic name for the call to prayer?", "choices": ["Adhan", "Takbir", "Tasbih", "Du'a"], "answerIndex": 0 },
+  { "id": "qm12", "text": "What creature carried the Prophet during the Isra and Mi'raj?", "choices": ["A camel", "A donkey", "Buraq (a winged steed)", "An eagle"], "answerIndex": 2 }
+]

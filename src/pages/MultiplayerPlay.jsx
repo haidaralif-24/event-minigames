@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Dice from '../components/Dice.jsx';
 import { useRoom } from '../hooks/useRoom.js';
-import { beginRoll, markPlayerConnected, markPlayerDisconnected, rollForActivePlayer, submitChallengeChoice, submitRapidAnswer } from '../services/roomService.js';
+import { beginRoll, markPlayerConnected, markPlayerDisconnected, rollForActivePlayer, submitChallengeChoice, submitMinigameAnswer, submitRapidAnswer } from '../services/roomService.js';
 
 // Keep in sync with the animation feel in Dice.jsx — this is how long the
 // dice visibly rolls for everyone (host, board, other players) before the
@@ -10,6 +10,7 @@ const ROLL_ANIMATION_MS = 1100;
 import { RAPID_QUESTIONS, getActivePlayerId, getRankings } from '../services/gameLogic.js';
 import { TOKEN_COLORS, ACTIVE_META } from '../data/constants.js';
 import challengeContent from '../content/maulid-nabi/challenge.json';
+import minigameQuestions from '../content/maulid-nabi/minigameQuestions.json';
 
 const ANSWER_STYLES = [
   'bg-[#e84d4d] hover:bg-[#f05b5b]',
@@ -78,6 +79,8 @@ export default function MultiplayerPlay() {
   const rapidQuestion = RAPID_QUESTIONS[room.rapidShot?.questionIndex || 0];
   const submitted = Boolean(room.rapidShot?.submitted?.[session.playerId]);
   const challengeQuestion = challengeContent.questions.find((question) => question.id === room.challenge?.questionId);
+  const minigameQuestion = minigameQuestions.find((question) => question.id === room.minigame?.questionId);
+  const miniSubmitted = Boolean(room.minigame?.submitted?.[session.playerId]);
   const rankings = getRankings(room, players);
   const placements = room.winner ? [room.winner, ...rankings.filter((id) => id !== room.winner)].slice(0, 3) : rankings.slice(0, 3);
 
@@ -108,6 +111,13 @@ export default function MultiplayerPlay() {
     setBusy(true); setMessage('');
     try { await submitChallengeChoice(session.playerId, choiceIndex); }
     catch (challengeError) { setMessage(challengeError.message || 'Could not answer.'); }
+    finally { setBusy(false); }
+  };
+  const sendMinigame = async (choiceIndex) => {
+    if (miniSubmitted) return;
+    setBusy(true); setMessage('');
+    try { await submitMinigameAnswer(session.roomCode, session.playerId, choiceIndex); setMessage('Answer locked!'); }
+    catch (submitError) { setMessage(submitError.message || 'Could not submit.'); }
     finally { setBusy(false); }
   };
 
@@ -157,7 +167,17 @@ export default function MultiplayerPlay() {
       </div>
     </section>}
 
-    {room.phase === 'minigame' && <section className="mx-auto max-w-4xl text-center"><PhaseLabel step="ROUND BREAK">Mini-game</PhaseLabel><div className="rounded-3xl bg-white px-10 py-14 shadow-xl ring-1 ring-black/5"><div className="text-7xl">🎯</div><h1 className="mt-6 text-5xl font-black">{room.minigame?.label}</h1><p className="mx-auto mt-4 max-w-2xl text-lg font-bold text-[#737887]">{room.minigame?.description}</p></div></section>}
+    {room.phase === 'minigame' && <section className="mx-auto max-w-5xl">
+      <PhaseLabel step="ROUND BREAK">Mini-game</PhaseLabel>
+      <div className="rounded-3xl bg-white px-10 py-10 shadow-xl ring-1 ring-black/5">
+        <p className="text-center text-[11px] font-black uppercase tracking-[.16em] text-[#ff8c4d]">{room.minigame?.label}</p>
+        <h1 className="mx-auto mt-1 max-w-4xl text-center text-4xl font-black leading-tight">{minigameQuestion?.text}</h1>
+        <div className="mt-9 grid grid-cols-2 gap-5">
+          {minigameQuestion?.choices?.map((choice, index) => <AnswerButton key={choice} choice={choice} index={index} selected={miniSubmitted && room.minigame?.answers?.[session.playerId]?.choiceIndex === index} disabled={miniSubmitted || busy} onClick={() => sendMinigame(index)} />)}
+        </div>
+        <div className="mt-7 min-h-8 text-center font-black text-[#4d79ff]">{miniSubmitted ? '✓ Answer locked. Waiting for the other players…' : message}</div>
+      </div>
+    </section>}
 
     {room.phase === 'finished' && <section className="mx-auto max-w-4xl text-center"><PhaseLabel step="FINISH">Final results</PhaseLabel><div className="rounded-3xl bg-white px-10 py-12 shadow-xl ring-1 ring-black/5"><div className="text-7xl">🏆</div><h1 className="mt-5 text-5xl font-black">Game complete!</h1><div className="mx-auto mt-8 max-w-2xl space-y-3">{placements.map((id, index) => <div key={id} className={`flex items-center rounded-2xl px-6 py-5 text-left ${index === 0 ? 'bg-[#fff3c4]' : 'bg-[#f4f5f8]'}`}><span className="mr-5 text-3xl">{['🥇', '🥈', '🥉'][index]}</span>{players[id]?.avatar && <img src={players[id].avatar} alt={players[id].name} className="mr-4 h-12 w-12 rounded-full border-2 border-[#18233f] object-cover" />}<span className="flex-1 text-xl font-black">{players[id]?.name}</span><span className="font-black text-[#6c7180]">Tile {(room.boardPositions?.[id] || 0) + 1}</span></div>)}</div><p className="mt-8 font-black text-[#4d79ff]">Great game, {me?.name}!</p></div></section>}
 

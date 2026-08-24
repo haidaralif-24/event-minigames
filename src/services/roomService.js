@@ -4,6 +4,7 @@ import { getInitialGameState, MAX_PLAYERS, RAPID_QUESTIONS } from './gameLogic.j
 import { ALL_ACCOUNTS, HOST_ACCOUNT, PLAYER_ACCOUNTS } from '../data/loginAccounts.js';
 import boardTiles from '../data/boardTiles.json';
 import challengeContent from '../content/maulid-nabi/challenge.json';
+import minigameQuestions from '../content/maulid-nabi/minigameQuestions.json';
 
 const GAME_PATH = 'gameState/current';
 const SESSION_KEY = 'event-minigame-player-session';
@@ -52,6 +53,30 @@ export async function createRoom() { return login(HOST_ACCOUNT.username, HOST_AC
 export async function joinRoom(_unusedRoomCode, username, password) { return login(username, password); }
 export function subscribeToRoom(_roomCode, callback, onError) { return onSnapshot(gameRef(), (snapshot) => callback(snapshot.exists() ? { id: GAME_PATH, ...snapshot.data() } : null), onError); }
 export async function updateRoom(_roomCode, updates) { await updateDoc(gameRef(), { ...updates, updatedAt: serverTimestamp() }); }
+
+// Pick a random mini-game quiz question, avoiding an immediate repeat of the
+// previously used one so consecutive rounds don't ask the same thing.
+export function pickMinigameQuestion(previousQuestionId) {
+  const pool = minigameQuestions.filter((question) => question.id !== previousQuestionId);
+  const options = pool.length ? pool : minigameQuestions;
+  return options[Math.floor(Math.random() * options.length)];
+}
+
+export async function submitMinigameAnswer(_roomCode, playerId, choiceIndex) {
+  const ref = gameRef();
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error('Game is not initialized.');
+    const game = snapshot.data();
+    if (game.phase !== 'minigame') throw new Error('No mini-game in progress.');
+    if (game.minigame?.submitted?.[playerId]) return;
+    transaction.update(ref, {
+      [`minigame.answers.${playerId}`]: { choiceIndex: Number(choiceIndex), answeredAt: serverTimestamp() },
+      [`minigame.submitted.${playerId}`]: true,
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
 
 export async function submitRapidAnswer(_roomCode, playerId, choiceIndex) {
   const ref = gameRef();
