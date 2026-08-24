@@ -103,6 +103,7 @@ export default function MultiplayerHost() {
   const [rapidCountdown, setRapidCountdown] = useState(5);
   const [orderCountdown, setOrderCountdown] = useState(5);
   const [miniCountdown, setMiniCountdown] = useState(12);
+  const [advanceError, setAdvanceError] = useState(null);
 
   // These refs let effects below always call the *latest* handler (defined
   // further down, after the early returns) without needing to restart their
@@ -116,6 +117,9 @@ export default function MultiplayerHost() {
   const minigameResolvedRef = useRef(false);
   const handledRollRef = useRef(null);
   const autoAdvanceTimeoutRef = useRef(null);
+  // Always holds the last *valid* room snapshot. Handlers read from this instead
+  // of a captured closure so a transient null/error room can never freeze them.
+  const roomRef = useRef(null);
 
   useEffect(() => {
     const syncFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -181,13 +185,22 @@ export default function MultiplayerHost() {
   // challenge) has resolved, so the host never has to click "Next Player".
   // Keyed off the resolved roll so it only fires once per turn, even across
   // a detour through the challenge phase and back.
+  //
+  // IMPORTANT: this effect must NOT clear the pending timeout on cleanup. A
+  // transient onSnapshot flicker to a null/error room makes `room?.phase`
+  // briefly undefined, which would otherwise cancel the scheduled nextTurn
+  // and — because handledRollRef is already set — never reschedule it. That
+  // silently stalls the lap and is exactly what made the minigame stop
+  // appearing after round 2+. So we clear only when a *new* roll supersedes
+  // it, never on transient re-renders.
   useEffect(() => {
     if (room?.phase !== 'board' || room?.rolling || !room?.lastRoll) return undefined;
     const key = `${room.round}-${room.activePlayerIndex}-${room.lastRoll.finalPosition ?? room.lastRoll.landedPosition}`;
     if (handledRollRef.current === key) return undefined;
     handledRollRef.current = key;
+    if (autoAdvanceTimeoutRef.current) clearTimeout(autoAdvanceTimeoutRef.current);
     autoAdvanceTimeoutRef.current = setTimeout(() => { autoAdvanceTimeoutRef.current = null; nextTurnRef.current(); }, 2200);
-    return () => { clearTimeout(autoAdvanceTimeoutRef.current); autoAdvanceTimeoutRef.current = null; };
+    return undefined;
   }, [room?.phase, room?.rolling, room?.lastRoll, room?.round, room?.activePlayerIndex]);
 
   if (loading) return <div className="grid min-h-screen place-items-center bg-[#0e1a3a] text-white">Loading game…</div>;
@@ -211,6 +224,25 @@ export default function MultiplayerHost() {
   const activeChallenge = challengeContent.questions.find((question) => question.id === room.challenge?.questionId);
   const hasStarted = !['lobby', 'rapid-shot', 'order-reveal'].includes(room.phase);
   const update = (updates) => updateRoom('current', updates);
+
+  // Wraps a Firestore write so a transient failure (network blip, etc.) can't
+  // silently drop a phase transition. Logs loudly and surfaces a visible
+  // "retrying" banner to the host, then retries once before giving up (at
+  // which point the host can use Force Next Turn).
+  const safeUpdate = async (label, performWrite, retries = 1) => {
+    try {
+      await performWrite();
+      setAdvanceError(null);
+    } catch (writeError) {
+      console.error(`[host] ${label} write failed:`, writeError);
+      if (retries > 0) {
+        setAdvanceError(`${label} failed — retrying…`);
+        setTimeout(() => { setAdvanceError(null); safeUpdate(label, performWrite, retries - 1); }, 1500);
+      } else {
+        setAdvanceError(`${label} failed — use Force Next Turn if stuck.`);
+      }
+    }
+  };
 
   const startRapid = () => {
     const active = activePlayers.length > 0 ? activePlayers : sortedPlayers;
@@ -239,39 +271,48 @@ export default function MultiplayerHost() {
   };
   const beginBoard = () => update({ phase: 'board', round: room.round || 1, activePlayerIndex: 0, lastRoll: null, rolling: null });
   const nextTurn = () => {
-    if (room.winner || !room.turnOrder?.length) return;
-    const order = room.turnOrder.filter((id) => players[id]?.connected !== false);
+    const g = roomRef.current;
+    if (!g || g.winner || !g.turnOrder?.length) return;
+    const players = g.players || {};
+    const activeId = getActivePlayerId(g);
+    const order = g.turnOrder.filter((id) => players[id]?.connected !== false);
     const current = order.indexOf(activeId);
     if (current < 0 || current >= order.length - 1) {
-      const options = MINI_GAMES.filter((game) => game.id !== room.minigame?.type);
+      console.log(`[host] nextTurn → entering 'minigame' (round ${g.round || 1}, previous type: ${g.minigame?.type || 'none'})`);
+      const options = MINI_GAMES.filter((game) => game.id !== g.minigame?.type);
       const game = (options.length ? options : MINI_GAMES)[Math.floor(Math.random() * (options.length ? options.length : MINI_GAMES.length))];
-      const question = pickMinigameQuestion(room.minigame?.questionId);
-      return update({
+      const question = pickMinigameQuestion(g.minigame?.questionId);
+      return safeUpdate('Start mini-game', () => update({
         phase: 'minigame',
         minigame: {
           type: game.id, label: game.label, description: game.description,
           questionId: question.id, answers: {}, submitted: {},
           startedAt: Date.now(),
         },
-      });
+      }));
     }
-    return update({ activePlayerIndex: room.turnOrder.indexOf(order[current + 1]), lastRoll: null });
+    const nextIndex = g.turnOrder.indexOf(order[current + 1]);
+    console.log(`[host] nextTurn → advancing to player index ${nextIndex} (round ${g.round || 1})`);
+    return safeUpdate('Advance turn', () => update({ activePlayerIndex: nextIndex, lastRoll: null }));
   };
   const resolveMinigame = async () => {
-    if (minigameResolvedRef.current) return;
-    if (room.phase !== 'minigame') return;
-    const question = minigameQuestions.find((item) => item.id === room.minigame?.questionId);
+    if (minigameResolvedRef.current) { console.log('[host] resolveMinigame skipped — already resolved'); return; }
+    const g = roomRef.current;
+    if (!g || g.phase !== 'minigame') { console.log('[host] resolveMinigame skipped — not in minigame'); return; }
+    const question = minigameQuestions.find((item) => item.id === g.minigame?.questionId);
     minigameResolvedRef.current = true;
+    const activePlayers = Object.values(g.players || {}).filter((player) => player.connected !== false);
     const ranking = [...activePlayers.map((player) => player.id)].sort((a, b) => {
-      const aCorrect = room.minigame?.answers?.[a]?.choiceIndex === question?.answerIndex;
-      const bCorrect = room.minigame?.answers?.[b]?.choiceIndex === question?.answerIndex;
+      const aCorrect = g.minigame?.answers?.[a]?.choiceIndex === question?.answerIndex;
+      const bCorrect = g.minigame?.answers?.[b]?.choiceIndex === question?.answerIndex;
       if (aCorrect !== bCorrect) return aCorrect ? -1 : 1;
-      const aTime = room.minigame?.answers?.[a]?.answeredAt ?? Infinity;
-      const bTime = room.minigame?.answers?.[b]?.answeredAt ?? Infinity;
+      const aTime = g.minigame?.answers?.[a]?.answeredAt ?? Infinity;
+      const bTime = g.minigame?.answers?.[b]?.answeredAt ?? Infinity;
       return aTime - bTime;
     });
     const results = Object.fromEntries(ranking.map((id, index) => [id, index + 1]));
-    await update({ phase: 'board', round: (room.round || 1) + 1, turnOrder: ranking, activePlayerIndex: 0, lastRoll: null, rolling: null, minigame: { ...room.minigame, results } });
+    console.log(`[host] resolveMinigame → leaving 'minigame', round ${(g.round || 1) + 1}, new turnOrder:`, ranking);
+    await safeUpdate('Resolve mini-game', () => update({ phase: 'board', round: (g.round || 1) + 1, turnOrder: ranking, activePlayerIndex: 0, lastRoll: null, rolling: null, minigame: { ...g.minigame, results } }));
   };
   const reset = async () => {
     if (!window.confirm('Reset the entire game and return everyone to the login lobby?')) return;
@@ -289,7 +330,9 @@ export default function MultiplayerHost() {
 
   // Keep the refs pointed at this render's freshest closures (see hook
   // declarations above) — plain assignments, not hook calls, so it's safe
-  // for this to happen after the early returns.
+  // for this to happen after the early returns. Also stash the last valid
+  // room so nextTurn/resolveMinigame never operate on a stale snapshot.
+  roomRef.current = room;
   advanceRapidRef.current = advanceRapid;
   beginBoardRef.current = beginBoard;
   nextTurnRef.current = nextTurn;
@@ -311,8 +354,9 @@ export default function MultiplayerHost() {
 
     <main className="mx-auto grid max-w-[1520px] items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <section><Board boardPositions={room.boardPositions} players={players} /></section>
-      <aside>
-        {room.phase === 'board' && <section className="mb-4 rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]"><h2 className="mb-3 font-display text-base">This Turn</h2><div className="flex items-center gap-3"><Dice rolling={Boolean(room.rolling?.playerId)} value={room.lastRoll?.value} /><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-[#ff8c4d]">{room.rolling?.playerId ? 'Rolling now' : 'Up next'}</p><p className="text-base font-black">{players[activeId]?.name || '—'}</p></div></div></section>}
+        <aside>
+          {advanceError && <div className="mb-4 rounded-2xl border-2 border-[#ff8c4d] bg-[#fff3c4] px-4 py-3 text-sm font-black text-[#18233f]">{advanceError}</div>}
+        {room.phase === 'board' && <section className="mb-4 rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]"><h2 className="mb-3 font-display text-base">This Turn</h2><div className="flex items-center gap-3"><Dice rolling={Boolean(room.rolling?.playerId)} values={room.lastRoll?.dice || [room.lastRoll?.value || 1, room.lastRoll?.value || 1]} /><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-[#ff8c4d]">{room.rolling?.playerId ? 'Rolling now' : 'Up next'}</p><p className="text-base font-black">{players[activeId]?.name || '—'}</p><p className="text-xs font-extrabold text-[#7a8395]">{room.lastRoll?.dice ? `${room.lastRoll.dice[0]} + ${room.lastRoll.dice[1]} = ${room.lastRoll.value}` : ''}</p></div></div></section>}
 
         <section className="mb-4 rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]"><div className="mb-2 flex items-center justify-between"><h2 className="font-display text-base">Players</h2><span className="text-[13px] font-black text-[#ff8c4d]">{activePlayers.length}/6</span></div>{playerSlots.map((player, index) => <PlayerRow key={player.id} player={player} index={index} started={hasStarted} position={room.boardPositions?.[player.id]} />)}</section>
 

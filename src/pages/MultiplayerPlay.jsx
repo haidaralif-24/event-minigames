@@ -96,9 +96,10 @@ export default function MultiplayerPlay() {
     setBusy(true); setMessage('');
     try {
       await beginRoll(session.playerId);
-      const finalValue = Math.floor(Math.random() * 6) + 1;
+      const die1 = Math.floor(Math.random() * 6) + 1;
+      const die2 = Math.floor(Math.random() * 6) + 1;
       setTimeout(async () => {
-        try { await rollForActivePlayer(session.playerId, finalValue); }
+        try { await rollForActivePlayer(session.playerId, [die1, die2]); }
         catch (rollError) { setMessage(rollError.message || 'Could not roll.'); }
         finally { setBusy(false); }
       }, ROLL_ANIMATION_MS);
@@ -155,7 +156,7 @@ export default function MultiplayerPlay() {
     {room.phase === 'board' && <section className="mx-auto max-w-4xl text-center">
       <PhaseLabel step="BOARD">{activeId === session.playerId ? 'Your turn' : 'Watch the board'}</PhaseLabel>
       <div className="rounded-3xl bg-white px-10 py-12 shadow-xl ring-1 ring-black/5">
-        {activeId === session.playerId ? <><div className="mx-auto grid h-24 w-24 place-items-center rounded-3xl bg-[#ff8c4d] text-5xl shadow-lg">🎲</div><h1 className="mt-6 text-5xl font-black">Your turn!</h1><p className="mt-3 text-lg font-bold text-[#737887]">Roll the dice to move on the projected board.</p><div className="mt-8 flex justify-center"><Dice rolling={Boolean(room.rolling?.playerId === session.playerId)} value={room.lastRoll?.value} onRollStart={roll} disabled={busy} /></div></> : <><div className="text-7xl">👀</div>{players[activeId]?.avatar && <img src={players[activeId].avatar} alt={players[activeId].name} className="mx-auto mt-4 h-20 w-20 rounded-full border-4 border-[#18233f] object-cover" />}<h1 className="mt-6 text-5xl font-black">{players[activeId]?.name}'s turn</h1><p className="mt-3 text-lg font-bold text-[#737887]">Watch the projected board. Your turn is coming up!</p><div className="mt-8 flex justify-center"><Dice rolling={Boolean(room.rolling?.playerId === activeId)} value={room.lastRoll?.value} /></div></>}
+        {activeId === session.playerId ? <><div className="mx-auto grid h-24 w-24 place-items-center rounded-3xl bg-[#ff8c4d] text-5xl shadow-lg">🎲</div><h1 className="mt-6 text-5xl font-black">Your turn!</h1><p className="mt-3 text-lg font-bold text-[#737887]">Roll both dice to move on the projected board.</p><div className="mt-8 flex justify-center"><Dice rolling={Boolean(room.rolling?.playerId === session.playerId)} values={room.lastRoll?.dice || [1, 1]} onRollStart={roll} disabled={busy} /></div></> : <><div className="text-7xl">👀</div>{players[activeId]?.avatar && <img src={players[activeId].avatar} alt={players[activeId].name} className="mx-auto mt-4 h-20 w-20 rounded-full border-4 border-[#18233f] object-cover" />}<h1 className="mt-6 text-5xl font-black">{players[activeId]?.name}'s turn</h1><p className="mt-3 text-lg font-bold text-[#737887]">Watch the projected board. Your turn is coming up!</p><div className="mt-8 flex justify-center"><Dice rolling={Boolean(room.rolling?.playerId === activeId)} values={room.lastRoll?.dice || [1, 1]} /></div></>}
         {room.lastChallenge?.playerId === session.playerId && <p className={`mt-6 rounded-2xl p-4 font-black ${room.lastChallenge.correct ? 'bg-[#dff8e7] text-[#218548]' : 'bg-[#fde4e4] text-[#c43838]'}`}>{room.lastChallenge.correct ? '🎉 Challenge cleared: +3 tiles!' : '❌ Challenge missed: moved back to your checkpoint.'}</p>}
       </div>
     </section>}

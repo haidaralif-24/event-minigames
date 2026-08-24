@@ -139,8 +139,12 @@ export async function beginRoll(playerId) {
 
 // Step 2: resolve the roll's outcome once the shared animation has played out
 // on the rolling player's device, and clear the "rolling" flag for everyone.
-export async function rollForActivePlayer(playerId, value) {
-  const roll = Math.min(6, Math.max(1, Number(value) || 1));
+export async function rollForActivePlayer(playerId, dice) {
+  // Two dice (2d6) — a bigger average step shortens the race. Each die is
+  // sanitized to 1..6 so a malformed client value can't break movement.
+  const d1 = Math.min(6, Math.max(1, Number(dice?.[0]) || 1));
+  const d2 = Math.min(6, Math.max(1, Number(dice?.[1]) || 1));
+  const roll = d1 + d2;
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(gameRef());
     if (!snapshot.exists()) throw new Error('Game is not initialized.');
@@ -148,12 +152,16 @@ export async function rollForActivePlayer(playerId, value) {
     const activePlayerId = game.turnOrder?.[game.activePlayerIndex ?? 0];
     if (game.phase !== 'board' || activePlayerId !== playerId) throw new Error('It is not your turn to roll.');
 
+    const finishIndex = boardTiles.length - 1;
     const initialPosition = game.boardPositions?.[playerId] || 0;
-    const landedPosition = Math.min(boardTiles.length - 1, initialPosition + roll);
+    // Clamp-and-win: an overshoot past the last tile simply lands on the
+    // finish (no exact-landing bounce-back), so a high roll near the end
+    // still wins instead of reversing the leftover steps.
+    const landedPosition = Math.min(finishIndex, initialPosition + roll);
     const landedTile = boardTiles[landedPosition];
     const boardPositions = { ...(game.boardPositions || {}), [playerId]: landedPosition };
     const playerCheckpoints = { ...(game.playerCheckpoints || {}) };
-    const base = { boardPositions, playerCheckpoints, rolling: null, lastRoll: { value: roll, playerId, landedPosition }, updatedAt: serverTimestamp() };
+    const base = { boardPositions, playerCheckpoints, rolling: null, lastRoll: { value: roll, dice: [d1, d2], playerId, landedPosition }, updatedAt: serverTimestamp() };
 
     if (landedTile?.type === 'challenge') {
       const questionIndex = (landedPosition + (game.round || 0) + playerId.length) % challengeContent.questions.length;
@@ -170,7 +178,7 @@ export async function rollForActivePlayer(playerId, value) {
       ...base,
       boardPositions,
       playerCheckpoints,
-      lastRoll: { value: roll, playerId, landedPosition, finalPosition, tileType: landedTile?.type || 'normal' },
+      lastRoll: { value: roll, dice: [d1, d2], playerId, landedPosition, finalPosition, tileType: landedTile?.type || 'normal' },
       ...(finalPosition >= boardTiles.length - 1 ? { winner: playerId, phase: 'finished' } : {}),
     });
   });
