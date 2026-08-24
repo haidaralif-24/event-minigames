@@ -20,7 +20,7 @@ async function runTransactionWithRetry(transactionFn, { maxAttempts = 6, baseDel
   let lastError;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      await runTransaction(db, transactionFn, 1);
+      await runTransaction(db, transactionFn, { maxAttempts: 1 });
       return;
     } catch (error) {
       lastError = error;
