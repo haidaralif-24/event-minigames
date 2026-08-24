@@ -131,23 +131,23 @@ export default function MultiplayerPlay() {
   // Live countdown for the player's rapid-shot question, mirroring the host's
   // 8s reveal window. Resets whenever the host advances to a new question.
   useEffect(() => {
-    if (room.phase !== 'rapid-shot') return undefined;
-    if (room.rapidShot?.revealed) { setRapidSecondsLeft(0); return undefined; }
+    if (room?.phase !== 'rapid-shot') return undefined;
+    if (room?.rapidShot?.revealed) { setRapidSecondsLeft(0); return undefined; }
     const qIndex = room.rapidShot?.questionIndex || 0;
     if (rapidQRef.current !== qIndex) { rapidQRef.current = qIndex; setRapidSecondsLeft(RAPID_REVEAL_SECONDS); }
     const tick = setInterval(() => setRapidSecondsLeft((seconds) => (seconds > 0 ? seconds - 1 : 0)), 1000);
     return () => clearInterval(tick);
-  }, [room.phase, room.rapidShot?.questionIndex, room.rapidShot?.revealed]);
+  }, [room?.phase, room?.rapidShot?.questionIndex, room?.rapidShot?.revealed]);
 
   // Live countdown for the player's round-break mini-game question (12s window).
   useEffect(() => {
-    if (room.phase !== 'minigame') return undefined;
-    if (room.minigame?.revealed) { setMiniSecondsLeft(0); return undefined; }
+    if (room?.phase !== 'minigame') return undefined;
+    if (room?.minigame?.revealed) { setMiniSecondsLeft(0); return undefined; }
     const qIndex = room.minigame?.questionIndex || 0;
     if (miniQRef.current !== qIndex) { miniQRef.current = qIndex; setMiniSecondsLeft(MINI_REVEAL_SECONDS); }
     const tick = setInterval(() => setMiniSecondsLeft((seconds) => (seconds > 0 ? seconds - 1 : 0)), 1000);
     return () => clearInterval(tick);
-  }, [room.phase, room.minigame?.questionIndex, room.minigame?.revealed]);
+  }, [room?.phase, room?.minigame?.questionIndex, room?.minigame?.revealed]);
 
   if (loading) return <div className="grid h-screen place-items-center bg-[#f4f4f7] text-xl font-black">Connecting…</div>;
   if (error || !room) return <div className="grid h-screen place-items-center bg-[#f4f4f7] text-xl font-black text-red-600">Game unavailable.</div>;
