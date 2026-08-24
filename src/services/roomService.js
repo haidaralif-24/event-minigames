@@ -5,6 +5,15 @@ import { ALL_ACCOUNTS, HOST_ACCOUNT, PLAYER_ACCOUNTS } from '../data/loginAccoun
 import boardTiles from '../data/boardTiles.json';
 import challengeContent from '../content/maulid-nabi/challenge.json';
 import minigameQuestions from '../content/maulid-nabi/minigameQuestions.json';
+import extraMinigameQuestions from '../content/maulid-nabi/questions.json';
+
+// Combined mini-game pool: the dedicated minigame bank plus the 12 questions
+// from questions.json, so every authored question is actually used. Normalised
+// to the `text` field the UI renders (questions.json uses `prompt`).
+export const MINIGAME_QUESTIONS = [
+  ...minigameQuestions,
+  ...extraMinigameQuestions.map((question) => ({ ...question, text: question.text ?? question.prompt })),
+];
 
 const GAME_PATH = 'gameState/current';
 
@@ -87,7 +96,7 @@ export async function updateRoom(_roomCode, updates) { await updateDoc(gameRef()
 // appears exactly once per cycle (no repeats until the whole pool is used).
 // Returns both the chosen id and the updated bag to persist in game state.
 export function pickMinigameQuestion(bag, previousQuestionId) {
-  const pool = minigameQuestions.map((question) => question.id);
+  const pool = MINIGAME_QUESTIONS.map((question) => question.id);
   return drawFromBag(pool, bag, previousQuestionId);
 }
 

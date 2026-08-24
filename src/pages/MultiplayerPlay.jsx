@@ -10,7 +10,6 @@ const ROLL_ANIMATION_MS = 1100;
 import { RAPID_QUESTIONS, getActivePlayerId, getRankings } from '../services/gameLogic.js';
 import { TOKEN_COLORS, ACTIVE_META } from '../data/constants.js';
 import challengeContent from '../content/maulid-nabi/challenge.json';
-import minigameQuestions from '../content/maulid-nabi/minigameQuestions.json';
 
 const ANSWER_STYLES = [
   'bg-[#e84d4d] hover:bg-[#f05b5b]',
@@ -121,7 +120,7 @@ export default function MultiplayerPlay() {
   const rapidQuestion = RAPID_QUESTIONS[room.rapidShot?.questionIndex || 0];
   const submitted = Boolean(room.rapidShot?.submitted?.[session.playerId]);
   const challengeQuestion = challengeContent.questions.find((question) => question.id === room?.challenge?.questionId);
-  const minigameQuestion = minigameQuestions.find((question) => question.id === room.minigame?.questionId);
+  const minigameQuestion = MINIGAME_QUESTIONS.find((question) => question.id === room.minigame?.questionId);
   const miniSubmitted = Boolean(room.minigame?.submitted?.[session.playerId]);
   const rankings = getRankings(room, players);
   const placements = room.winner ? [room.winner, ...rankings.filter((id) => id !== room.winner)].slice(0, 3) : rankings.slice(0, 3);

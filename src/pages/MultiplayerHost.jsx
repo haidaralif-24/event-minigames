@@ -3,11 +3,10 @@ import Board from '../components/MultiplayerBoard.jsx';
 import Dice from '../components/Dice.jsx';
 import { useRoom } from '../hooks/useRoom.js';
 import { getActivePlayerId, getRankings, resolveRapidShotOrder, RAPID_QUESTIONS } from '../services/gameLogic.js';
-import { resetGame, updateRoom, pickMinigameQuestion } from '../services/roomService.js';
+import { resetGame, updateRoom, pickMinigameQuestion, MINIGAME_QUESTIONS } from '../services/roomService.js';
 import { TOKEN_COLORS, ACTIVE_META, MINI_GAMES } from '../data/constants.js';
 import { PLAYER_ACCOUNTS } from '../data/loginAccounts.js';
 import challengeContent from '../content/maulid-nabi/challenge.json';
-import minigameQuestions from '../content/maulid-nabi/minigameQuestions.json';
 import boardTiles from '../data/boardTiles.json';
 
 const TOTAL_TILES = boardTiles.length;
@@ -314,7 +313,7 @@ export default function MultiplayerHost() {
     if (minigameResolvedRef.current) { console.log('[host] resolveMinigame skipped — already resolved'); return; }
     const g = roomRef.current;
     if (!g || g.phase !== 'minigame') { console.log('[host] resolveMinigame skipped — not in minigame'); return; }
-    const question = minigameQuestions.find((item) => item.id === g.minigame?.questionId);
+    const question = MINIGAME_QUESTIONS.find((item) => item.id === g.minigame?.questionId);
     minigameResolvedRef.current = true;
     const activePlayers = Object.values(g.players || {}).filter((player) => player.connected !== false);
     const ranking = [...activePlayers.map((player) => player.id)].sort((a, b) => {
@@ -384,7 +383,7 @@ export default function MultiplayerHost() {
           {room.phase === 'board' && <><p className="mb-3 text-center text-[11.5px] font-extrabold text-[#7a8395]">{room.rolling?.playerId ? `${players[room.rolling.playerId]?.name || 'Player'} is rolling…` : room.lastRoll ? 'Advancing to the next player…' : `Waiting for ${players[activeId]?.name || 'the active player'} to roll.`}</p><button onClick={forceNextTurn} disabled={!activeId} className="w-full rounded-xl border-2 border-[#18233f]/15 bg-transparent px-4 py-2.5 font-display text-[12px] text-[#7a8395] disabled:opacity-40">Force Next Turn ⏭</button></>}
           {room.phase === 'challenge' && <div className="text-center"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#4d79ff]">Challenge Tile</p><h2 className="mt-2 font-display text-xl">{players[room.challenge?.teamId]?.name}</h2><p className="mt-3 text-sm font-bold text-[#7a8395]">{activeChallenge?.prompt}</p><p className="mt-4 text-xs font-black text-[#ff8c4d]">They answer on their device · Correct +{challengeContent.winTiles}, wrong −{challengeContent.loseTiles} to checkpoint</p></div>}
           {room.phase === 'minigame' && (() => {
-            const question = minigameQuestions.find((item) => item.id === room.minigame?.questionId);
+            const question = MINIGAME_QUESTIONS.find((item) => item.id === room.minigame?.questionId);
             const answered = activePlayers.filter((player) => room.minigame?.submitted?.[player.id]).length;
             return <><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#ff8c4d]">Round Break · {room.minigame?.label}</p><h2 className="my-2 font-display text-lg">{question?.text}</h2><div className="my-3 grid grid-cols-2 gap-2">{question?.choices?.map((choice, index) => <div key={choice} className="rounded-xl border-2 border-[#18233f]/10 bg-[#f8f5eb] p-2 text-xs font-bold"><span className="mr-1 font-black text-[#ff8c4d]">{['A', 'B', 'C', 'D'][index]}.</span>{choice}</div>)}</div><p className="mb-3 text-xs font-extrabold text-[#7a8395]">Answered {answered}/{activePlayers.length}</p><button onClick={resolveMinigameRef.current} className="w-full rounded-xl bg-[#4d79ff] px-4 py-3 font-display text-[13px] text-white shadow-[0_4px_0_rgba(0,0,0,.18)]">Resolve Now · {miniCountdown}s</button></>;
           })()}
