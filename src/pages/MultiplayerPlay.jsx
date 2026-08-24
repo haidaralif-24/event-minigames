@@ -120,7 +120,7 @@ export default function MultiplayerPlay() {
   const activeId = getActivePlayerId(room);
   const rapidQuestion = RAPID_QUESTIONS[room.rapidShot?.questionIndex || 0];
   const submitted = Boolean(room.rapidShot?.submitted?.[session.playerId]);
-  const challengeQuestion = challengeContent.questions.find((question) => question.id === room.challenge?.questionId);
+  const challengeQuestion = challengeContent.questions.find((question) => question.id === room?.challenge?.questionId);
   const minigameQuestion = minigameQuestions.find((question) => question.id === room.minigame?.questionId);
   const miniSubmitted = Boolean(room.minigame?.submitted?.[session.playerId]);
   const rankings = getRankings(room, players);

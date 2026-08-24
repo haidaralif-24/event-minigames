@@ -221,7 +221,7 @@ export default function MultiplayerHost() {
   const finishPlacements = room.winner
     ? [room.winner, ...rankings.filter((id) => id !== room.winner)].slice(0, 3)
     : rankings.slice(0, 3);
-  const activeChallenge = challengeContent.questions.find((question) => question.id === room.challenge?.questionId);
+  const activeChallenge = challengeContent.questions.find((question) => question.id === room?.challenge?.questionId);
   const hasStarted = !['lobby', 'rapid-shot', 'order-reveal'].includes(room.phase);
   const update = (updates) => updateRoom('current', updates);
 
