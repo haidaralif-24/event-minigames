@@ -11,6 +11,7 @@ import minigameQuestions from '../content/maulid-nabi/minigameQuestions.json';
 import boardTiles from '../data/boardTiles.json';
 
 const TOTAL_TILES = boardTiles.length;
+const MIN_MINIGAME_DISPLAY_MS = 3500;
 
 function PhaseBadge({ phase, round }) {
   const labels = {
@@ -156,13 +157,25 @@ export default function MultiplayerHost() {
 
   // Resolve the moment every active player has submitted an answer, so the
   // round doesn't wait out the full timer when nobody's left to answer.
+  // Gated behind MIN_MINIGAME_DISPLAY_MS so a lagging client that hasn't
+  // finished receiving/rendering the question yet still gets a fair window
+  // to see and answer before the round flips back to 'board'.
   useEffect(() => {
     if (room?.phase !== 'minigame') return undefined;
     const activeIds = Object.values(room.players || {}).filter((player) => player.connected !== false).map((player) => player.id);
     const submittedCount = activeIds.filter((id) => room.minigame?.submitted?.[id]).length;
-    if (activeIds.length > 0 && submittedCount >= activeIds.length) resolveMinigameRef.current();
+    const elapsed = Date.now() - (room.minigame?.startedAt || Date.now());
+    if (activeIds.length > 0 && submittedCount >= activeIds.length) {
+      if (elapsed >= MIN_MINIGAME_DISPLAY_MS) {
+        resolveMinigameRef.current();
+      } else {
+        const remaining = MIN_MINIGAME_DISPLAY_MS - elapsed;
+        const timeout = setTimeout(() => resolveMinigameRef.current(), remaining);
+        return () => clearTimeout(timeout);
+      }
+    }
     return undefined;
-  }, [room?.phase, room?.minigame?.submitted, room?.minigame?.questionId, room?.players]);
+  }, [room?.phase, room?.minigame?.submitted, room?.minigame?.questionId, room?.players, room?.minigame?.startedAt]);
 
   // Auto-advance turns on the board once a roll (and any tile effect, e.g. a
   // challenge) has resolved, so the host never has to click "Next Player".
