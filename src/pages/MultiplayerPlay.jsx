@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Dice from '../components/Dice.jsx';
 import { useRoom } from '../hooks/useRoom.js';
 import { beginRoll, markPlayerConnected, markPlayerDisconnected, rollForActivePlayer, submitChallengeChoice, submitMinigameAnswer, submitRapidAnswer, updateRoom } from '../services/roomService.js';
@@ -58,6 +58,33 @@ function AnswerButton({ choice, index, selected, disabled, onClick }) {
   </button>;
 }
 
+function AnswerReveal({ question, playerChoiceIndex, correct, label }) {
+  if (!question) return null;
+  return (
+    <div className="mt-7 rounded-2xl border-2 border-[#18233f]/10 bg-[#f6f8ff] p-5">
+      <p className="text-[10px] font-black uppercase tracking-[.16em] text-[#4d79ff]">{label || 'Correct answer'}</p>
+      <ul className="mt-3 space-y-2">
+        {question.choices.map((choice, index) => {
+          const isCorrect = index === question.answerIndex;
+          const isPlayer = index === playerChoiceIndex;
+          const cls = isCorrect
+            ? 'border-[#3cae61] bg-[#dff8e7] text-[#1c6b3a]'
+            : isPlayer
+              ? 'border-[#c43838] bg-[#fde4e4] text-[#8f2b2b]'
+              : 'border-[#18233f]/10 bg-white text-[#18233f]';
+          return (
+            <li key={choice} className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-lg font-black ${cls}`}>
+              <span>{isCorrect ? '✅' : isPlayer ? '❌' : ''}</span>
+              <span className="flex-1">{choice}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-4 text-base font-black text-[#18233f]">Correct answer: <span className="text-[#218548]">{question.choices[question.answerIndex]}</span>{typeof correct === 'boolean' && <span className={correct ? ' text-[#218548]' : ' text-[#c43838]'}> · {correct ? 'You got it!' : 'You missed it.'}</span>}</p>
+    </div>
+  );
+}
+
 export default function MultiplayerPlay() {
   const { room, loading, error, session } = useRoom();
   const [busy, setBusy] = useState(false);
@@ -69,6 +96,21 @@ export default function MultiplayerPlay() {
       if (session?.roomCode && session?.playerId) markPlayerDisconnected(session.roomCode, session.playerId).catch(() => {});
     };
   }, [session?.roomCode, session?.playerId]);
+
+  // When a challenge tile resolves, surface the correct answer on the player's
+  // device for a beat even though the phase has already flipped back to 'board'.
+  const [challengeRevealActive, setChallengeRevealActive] = useState(false);
+  const prevChallengeResolved = useRef(false);
+  useEffect(() => {
+    const resolved = Boolean(room.challenge?.resolved);
+    if (resolved && !prevChallengeResolved.current) {
+      setChallengeRevealActive(true);
+      const timer = setTimeout(() => setChallengeRevealActive(false), 4500);
+      prevChallengeResolved.current = resolved;
+      return () => clearTimeout(timer);
+    }
+    prevChallengeResolved.current = resolved;
+  }, [room.challenge?.resolved]);
 
   if (loading) return <div className="grid h-screen place-items-center bg-[#f4f4f7] text-xl font-black">Connecting…</div>;
   if (error || !room) return <div className="grid h-screen place-items-center bg-[#f4f4f7] text-xl font-black text-red-600">Game unavailable.</div>;
@@ -145,6 +187,7 @@ export default function MultiplayerPlay() {
           {rapidQuestion?.choices?.map((choice, index) => <AnswerButton key={choice} choice={choice} index={index} selected={submitted && room.rapidShot?.answers?.[session.playerId] === index} disabled={submitted || busy} onClick={() => sendRapid(index)} />)}
         </div>
         <div className="mt-7 min-h-8 text-center font-black text-[#4d79ff]">{submitted ? '✓ Answer locked. Waiting for the other players…' : message}</div>
+        {submitted && <AnswerReveal question={rapidQuestion} playerChoiceIndex={room.rapidShot?.answers?.[session.playerId]} correct={room.rapidShot?.answers?.[session.playerId] === rapidQuestion?.answerIndex} label="Rapid Shot · Answer" />}
       </div>
     </section>}
 
@@ -161,6 +204,7 @@ export default function MultiplayerPlay() {
       <div className="rounded-3xl bg-white px-10 py-12 shadow-xl ring-1 ring-black/5">
         {activeId === session.playerId ? <><div className="mx-auto grid h-24 w-24 place-items-center rounded-3xl bg-[#ff8c4d] text-5xl shadow-lg">🎲</div><h1 className="mt-6 text-5xl font-black">Your turn!</h1><p className="mt-3 text-lg font-bold text-[#737887]">Roll both dice to move on the projected board.</p><div className="mt-8 flex justify-center"><Dice rolling={Boolean(room.rolling?.playerId === session.playerId)} values={room.lastRoll?.dice || [1, 1]} onRollStart={roll} disabled={busy} /></div></> : <><div className="text-7xl">👀</div>{players[activeId]?.avatar && <img src={players[activeId].avatar} alt={players[activeId].name} className="mx-auto mt-4 h-20 w-20 rounded-full border-4 border-[#18233f] object-cover" />}<h1 className="mt-6 text-5xl font-black">{players[activeId]?.name}'s turn</h1><p className="mt-3 text-lg font-bold text-[#737887]">Watch the projected board. Your turn is coming up!</p><div className="mt-8 flex justify-center"><Dice rolling={Boolean(room.rolling?.playerId === activeId)} values={room.lastRoll?.dice || [1, 1]} /></div></>}
         {room.lastChallenge?.playerId === session.playerId && <p className={`mt-6 rounded-2xl p-4 font-black ${room.lastChallenge.correct ? 'bg-[#dff8e7] text-[#218548]' : 'bg-[#fde4e4] text-[#c43838]'}`}>{room.lastChallenge.correct ? '🎉 Challenge cleared: +3 tiles!' : '❌ Challenge missed: moved back to your checkpoint.'}</p>}
+        {challengeRevealActive && room.challenge?.resolved && <AnswerReveal question={challengeQuestion} playerChoiceIndex={room.challenge?.choiceIndex} correct={room.challenge?.correct} label="Challenge Tile · Answer" />}
       </div>
     </section>}
 
@@ -180,6 +224,7 @@ export default function MultiplayerPlay() {
           {minigameQuestion?.choices?.map((choice, index) => <AnswerButton key={choice} choice={choice} index={index} selected={miniSubmitted && room.minigame?.answers?.[session.playerId]?.choiceIndex === index} disabled={miniSubmitted || busy} onClick={() => sendMinigame(index)} />)}
         </div>
         <div className="mt-7 min-h-8 text-center font-black text-[#4d79ff]">{miniSubmitted ? '✓ Answer locked. Waiting for the other players…' : message}</div>
+        {miniSubmitted && <AnswerReveal question={minigameQuestion} playerChoiceIndex={room.minigame?.answers?.[session.playerId]?.choiceIndex} correct={room.minigame?.answers?.[session.playerId]?.choiceIndex === minigameQuestion?.answerIndex} label="Round Break · Answer" />}
       </div>
     </section>}
 
