@@ -102,7 +102,7 @@ export default function MultiplayerPlay() {
   const [challengeRevealActive, setChallengeRevealActive] = useState(false);
   const prevChallengeResolved = useRef(false);
   useEffect(() => {
-    const resolved = Boolean(room.challenge?.resolved);
+    const resolved = Boolean(room?.challenge?.resolved);
     if (resolved && !prevChallengeResolved.current) {
       setChallengeRevealActive(true);
       const timer = setTimeout(() => setChallengeRevealActive(false), 4500);
@@ -110,7 +110,7 @@ export default function MultiplayerPlay() {
       return () => clearTimeout(timer);
     }
     prevChallengeResolved.current = resolved;
-  }, [room.challenge?.resolved]);
+  }, [room?.challenge?.resolved]);
 
   if (loading) return <div className="grid h-screen place-items-center bg-[#f4f4f7] text-xl font-black">Connecting…</div>;
   if (error || !room) return <div className="grid h-screen place-items-center bg-[#f4f4f7] text-xl font-black text-red-600">Game unavailable.</div>;
@@ -203,7 +203,7 @@ export default function MultiplayerPlay() {
       <div className="rounded-3xl bg-white px-10 py-12 shadow-xl ring-1 ring-black/5">
         {activeId === session.playerId ? <><div className="mx-auto grid h-24 w-24 place-items-center rounded-3xl bg-[#ff8c4d] text-5xl shadow-lg">🎲</div><h1 className="mt-6 text-5xl font-black">Your turn!</h1><p className="mt-3 text-lg font-bold text-[#737887]">Roll the die to move on the projected board.</p><div className="mt-8 flex justify-center"><Dice rolling={Boolean(room.rolling?.playerId === session.playerId)} value={room.lastRoll?.value || 1} onRollStart={roll} disabled={busy} /></div></> : <><div className="text-7xl">👀</div>{players[activeId]?.avatar && <img src={players[activeId].avatar} alt={players[activeId].name} className="mx-auto mt-4 h-20 w-20 rounded-full border-4 border-[#18233f] object-cover" />}<h1 className="mt-6 text-5xl font-black">{players[activeId]?.name}'s turn</h1><p className="mt-3 text-lg font-bold text-[#737887]">Watch the projected board. Your turn is coming up!</p><div className="mt-8 flex justify-center"><Dice rolling={Boolean(room.rolling?.playerId === activeId)} value={room.lastRoll?.value || 1} /></div></>}
         {room.lastChallenge?.playerId === session.playerId && <p className={`mt-6 rounded-2xl p-4 font-black ${room.lastChallenge.correct ? 'bg-[#dff8e7] text-[#218548]' : 'bg-[#fde4e4] text-[#c43838]'}`}>{room.lastChallenge.correct ? '🎉 Challenge cleared: +3 tiles!' : '❌ Challenge missed: moved back to your checkpoint.'}</p>}
-        {challengeRevealActive && room.challenge?.resolved && room.challenge?.teamId === session.playerId && <AnswerReveal question={challengeQuestion} playerChoiceIndex={room.challenge?.choiceIndex} correct={room.challenge?.correct} label="Challenge Tile · Answer" />}
+        {challengeRevealActive && room?.challenge?.resolved && room?.challenge?.teamId === session.playerId && <AnswerReveal question={challengeQuestion} playerChoiceIndex={room?.challenge?.choiceIndex} correct={room?.challenge?.correct} label="Challenge Tile · Answer" />}
       </div>
     </section>}
 
