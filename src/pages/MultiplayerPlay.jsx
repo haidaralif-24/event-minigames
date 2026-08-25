@@ -26,6 +26,7 @@ const ANSWER_ICONS = ['▲', '◆', '●', '■'];
 // a live clock without another Firestore round-trip.
 const RAPID_REVEAL_SECONDS = 8;
 const MINI_REVEAL_SECONDS = 15;
+const CHALLENGE_TIME_LIMIT = 20;
 
 function TimerBadge({ seconds, revealed }) {
   if (revealed) return <span className="inline-flex items-center gap-2 rounded-full bg-[#dff8e7] px-5 py-2 text-sm font-black text-[#1c6b3a]">✅ Answer revealed</span>;
@@ -103,8 +104,10 @@ export default function MultiplayerPlay() {
   const [message, setMessage] = useState('');
   const [rapidSecondsLeft, setRapidSecondsLeft] = useState(RAPID_REVEAL_SECONDS);
   const [miniSecondsLeft, setMiniSecondsLeft] = useState(MINI_REVEAL_SECONDS);
+  const [challengeSecondsLeft, setChallengeSecondsLeft] = useState(CHALLENGE_TIME_LIMIT);
   const rapidQRef = useRef(null);
   const miniQRef = useRef(null);
+  const challengeQRef = useRef(null);
 
   useEffect(() => {
     if (session?.roomCode && session?.playerId) markPlayerConnected(session.roomCode, session.playerId).catch(() => {});
@@ -148,6 +151,16 @@ export default function MultiplayerPlay() {
     const tick = setInterval(() => setMiniSecondsLeft((seconds) => (seconds > 0 ? seconds - 1 : 0)), 1000);
     return () => clearInterval(tick);
   }, [room?.phase, room?.minigame?.questionIndex, room?.minigame?.revealed]);
+
+  // Live countdown for the player's challenge tile — 20s to answer before the
+  // host auto-resolves it as a miss.
+  useEffect(() => {
+    if (room?.phase !== 'challenge' || room?.challenge?.resolved) return undefined;
+    const qId = room?.challenge?.questionId;
+    if (challengeQRef.current !== qId) { challengeQRef.current = qId; setChallengeSecondsLeft(CHALLENGE_TIME_LIMIT); }
+    const tick = setInterval(() => setChallengeSecondsLeft((seconds) => (seconds > 0 ? seconds - 1 : 0)), 1000);
+    return () => clearInterval(tick);
+  }, [room?.phase, room?.challenge?.questionId, room?.challenge?.resolved]);
 
   if (loading) return <div className="grid h-screen place-items-center bg-[#f4f4f7] text-xl font-black">Connecting…</div>;
   if (error || !room) return <div className="grid h-screen place-items-center bg-[#f4f4f7] text-xl font-black text-red-600">Game unavailable.</div>;
@@ -251,6 +264,7 @@ export default function MultiplayerPlay() {
     {room.phase === 'challenge' && <section className="mx-auto max-w-5xl">
       <PhaseLabel step="CHALLENGE">Challenge tile</PhaseLabel>
       <div className="rounded-3xl bg-white px-10 py-10 shadow-xl ring-1 ring-black/5">
+        <div className="mb-5 flex justify-center"><TimerBadge seconds={challengeSecondsLeft} revealed={Boolean(room.challenge?.resolved)} /></div>
         {room.challenge?.teamId === session.playerId ? <><h1 className="mx-auto max-w-4xl text-center text-4xl font-black leading-tight">{challengeQuestion?.prompt}</h1><div className="mt-9 grid grid-cols-2 gap-5">{challengeQuestion?.choices.map((choice, index) => <AnswerButton key={choice} choice={choice} index={index} disabled={busy} onClick={() => answerChallenge(index)} />)}</div></> : <div className="py-12 text-center"><div className="text-7xl">⚡</div>{players[room.challenge?.teamId]?.avatar && <img src={players[room.challenge?.teamId].avatar} alt={players[room.challenge?.teamId].name} className="mx-auto mt-4 h-20 w-20 rounded-full border-4 border-[#18233f] object-cover" />}<h1 className="mt-6 text-4xl font-black">{players[room.challenge?.teamId]?.name} is answering</h1><p className="mt-3 text-lg font-bold text-[#737887]">Watch the projector for the result.</p></div>}
       </div>
     </section>}

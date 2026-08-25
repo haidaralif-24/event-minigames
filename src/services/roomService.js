@@ -272,3 +272,34 @@ export async function submitChallengeChoice(playerId, choiceIndex) {
     });
   });
 }
+
+// Called by the host when the 20s challenge window elapses with no answer:
+// resolves the challenge as a miss (moves the team back to its checkpoint,
+// exactly as a wrong answer would) and advances the turn.
+export async function resolveChallengeTimeout() {
+  await runTransactionWithRetry(async (transaction) => {
+    const snapshot = await transaction.get(gameRef());
+    if (!snapshot.exists()) throw new Error('Game is not initialized.');
+    const game = snapshot.data();
+    const challenge = game.challenge;
+    if (game.phase !== 'challenge' || !challenge || challenge.resolved) return;
+    const playerId = challenge.teamId;
+    const boardPositions = { ...(game.boardPositions || {}) };
+    const playerCheckpoints = { ...(game.playerCheckpoints || {}) };
+    const currentPosition = boardPositions[playerId] || challenge.landedPosition || 0;
+    const move = -challengeContent.loseTiles;
+    const finalPosition = Math.max(playerCheckpoints[playerId] || 0, currentPosition + move);
+    boardPositions[playerId] = finalPosition;
+    if (boardTiles[finalPosition]?.type === 'checkpoint') playerCheckpoints[playerId] = finalPosition;
+    transaction.update(gameRef(), {
+      boardPositions,
+      playerCheckpoints,
+      lastRoll: { ...(game.lastRoll || {}), playerId, finalPosition },
+      challenge: { ...challenge, resolved: true, correct: false, choiceIndex: null, timedOut: true, finalPosition, answeredAt: serverTimestamp() },
+      lastChallenge: { playerId, correct: false, move, finalPosition, timedOut: true },
+      phase: finalPosition >= boardTiles.length - 1 ? 'finished' : 'board',
+      ...(finalPosition >= boardTiles.length - 1 ? { winner: playerId } : {}),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}

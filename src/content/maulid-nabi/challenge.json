@@ -1,5 +1,5 @@
 {
-  "timeLimit": 15,
+  "timeLimit": 20,
   "winTiles": 3,
   "loseTiles": 5,
   "questions": [

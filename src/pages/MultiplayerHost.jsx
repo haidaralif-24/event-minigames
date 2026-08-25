@@ -3,7 +3,7 @@ import Board from '../components/MultiplayerBoard.jsx';
 import Dice from '../components/Dice.jsx';
 import { useRoom } from '../hooks/useRoom.js';
 import { getActivePlayerId, getRankings, resolveRapidShotOrder, RAPID_QUESTIONS } from '../services/gameLogic.js';
-import { resetGame, updateRoom, pickMinigameQuestions, MINIGAME_QUESTIONS } from '../services/roomService.js';
+import { resetGame, updateRoom, pickMinigameQuestions, resolveChallengeTimeout, MINIGAME_QUESTIONS } from '../services/roomService.js';
 import { TOKEN_COLORS, ACTIVE_META, MINI_GAMES } from '../data/constants.js';
 import { PLAYER_ACCOUNTS } from '../data/loginAccounts.js';
 import challengeContent from '../content/maulid-nabi/challenge.json';
@@ -139,6 +139,7 @@ export default function MultiplayerHost() {
   const [rapidCountdown, setRapidCountdown] = useState(8);
   const [orderCountdown, setOrderCountdown] = useState(5);
   const [miniCountdown, setMiniCountdown] = useState(15);
+  const [challengeCountdown, setChallengeCountdown] = useState(20);
   const [advanceError, setAdvanceError] = useState(null);
 
   // These refs let effects below always call the *latest* handler (defined
@@ -152,6 +153,7 @@ export default function MultiplayerHost() {
   const resolveMinigameRef = useRef(() => {});
   const advanceMinigameRef = useRef(() => {});
   const minigameResolvedRef = useRef(false);
+  const challengeQRef = useRef(null);
   const handledRollRef = useRef(null);
   const autoAdvanceTimeoutRef = useRef(null);
   // Always holds the last *valid* room snapshot. Handlers read from this instead
@@ -230,6 +232,19 @@ export default function MultiplayerHost() {
     }
     return undefined;
   }, [room?.phase, room?.minigame?.questionIndex, room?.minigame?.revealed, room?.minigame?.submitted, room?.players]);
+
+  // Challenge tile: give the active team 20s to answer on their device. If the
+  // window elapses unanswered, auto-resolve it as a miss (resolveChallengeTimeout
+  // moves them back to their checkpoint and advances the turn).
+  const CHALLENGE_TIME_LIMIT = 20;
+  useEffect(() => {
+    if (room?.phase !== 'challenge' || room?.challenge?.resolved) return undefined;
+    const qId = room?.challenge?.questionId;
+    if (challengeQRef.current !== qId) { challengeQRef.current = qId; setChallengeCountdown(CHALLENGE_TIME_LIMIT); }
+    const tick = setInterval(() => setChallengeCountdown((seconds) => Math.max(0, seconds - 1)), 1000);
+    const end = setTimeout(() => resolveChallengeTimeout().catch(console.error), CHALLENGE_TIME_LIMIT * 1000);
+    return () => { clearInterval(tick); clearTimeout(end); };
+  }, [room?.phase, room?.challenge?.questionId, room?.challenge?.resolved]);
 
   // Auto-advance turns on the board once a roll (and any tile effect, e.g. a
   // challenge) has resolved, so the host never has to click "Next Player".
@@ -492,7 +507,7 @@ export default function MultiplayerHost() {
             {room.phase === 'lobby' && <><p className="mb-3 text-center text-[11.5px] font-extrabold text-[#7a8395]">{activePlayers.length === 0 ? 'Waiting for player accounts to log in.' : `${activePlayers.length} player${activePlayers.length > 1 ? 's' : ''} connected.`}</p><button disabled={activePlayers.length === 0} onClick={startRapid} className="w-full rounded-xl bg-[#45f27b] px-4 py-3 font-display text-[13px] shadow-[0_4px_0_rgba(0,0,0,.18)] disabled:bg-[#e4dfc9] disabled:text-[#a39c85] disabled:shadow-none">Start {RAPID_QUESTIONS.length} Rapid Shots {activePlayers.length > 0 ? `(${activePlayers.length} Player${activePlayers.length > 1 ? 's' : ''})` : ''}</button></>}
             {room.phase === 'order-reveal' && <><h2 className="mb-3 font-display text-lg">Starting Order</h2>{room.turnOrder.map((id, index) => <div key={id} className="flex justify-between border-b border-[#18233f]/10 py-2 text-sm font-bold"><span>#{index + 1} {players[id]?.name}</span><span>{room.rapidShot?.scores?.[id] || 0}</span></div>)}<button onClick={beginBoard} className="mt-4 w-full rounded-xl bg-[#45f27b] px-4 py-3 font-display text-[13px] shadow-[0_4px_0_rgba(0,0,0,.18)]">Start Board Now · {orderCountdown}s</button></>}
             {room.phase === 'board' && <><p className="mb-3 text-center text-[11.5px] font-extrabold text-[#7a8395]">{room.rolling?.playerId ? `${players[room.rolling.playerId]?.name || 'Player'} is rolling…` : room.lastRoll ? 'Advancing to the next player…' : `Waiting for ${players[activeId]?.name || 'the active player'} to roll.`}</p><button onClick={forceNextTurn} disabled={!activeId} className="w-full rounded-xl border-2 border-[#18233f]/15 bg-transparent px-4 py-2.5 font-display text-[12px] text-[#7a8395] disabled:opacity-40">Force Next Turn ⏭</button></>}
-            {room.phase === 'challenge' && <div className="text-center"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#4d79ff]">Challenge Tile</p><h2 className="mt-2 font-display text-xl">{players[room.challenge?.teamId]?.name}</h2><p className="mt-3 text-sm font-bold text-[#7a8395]">{activeChallenge?.prompt}</p><p className="mt-4 text-xs font-black text-[#ff8c4d]">They answer on their device · Correct +{challengeContent.winTiles}, wrong −{challengeContent.loseTiles} to checkpoint</p></div>}
+            {room.phase === 'challenge' && <div className="text-center"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#4d79ff]">Challenge Tile</p><h2 className="mt-2 font-display text-xl">{players[room.challenge?.teamId]?.name}</h2><p className="mt-3 text-sm font-bold text-[#7a8395]">{activeChallenge?.prompt}</p><div className="mt-4 flex justify-center"><span className="inline-flex items-center gap-2 rounded-full bg-[#18233f] px-5 py-2 text-sm font-black text-white">⏱ {challengeCountdown}s</span></div><p className="mt-4 text-xs font-black text-[#ff8c4d]">They answer on their device · Correct +{challengeContent.winTiles}, wrong −{challengeContent.loseTiles} to checkpoint</p></div>}
             {room.phase === 'finished' && <section className="rounded-[20px] bg-[#fff8e7] p-[18px] text-[#18233f]"><h2 className="mb-1 font-display text-xl">🏆 Final Results</h2><p className="mb-3 text-xs font-extrabold text-[#7a8395]">The race is complete — here's how the teams finished.</p><div className="space-y-2">{rankings.map((id, index) => { const player = players[id]; const color = TOKEN_COLORS[Math.max(0, Object.keys(players).sort().indexOf(id)) % TOKEN_COLORS.length]; const position = (room.boardPositions?.[id] || 0) + 1; const rank = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1; return <div key={id} className={`flex items-center gap-3 rounded-xl px-2 py-2 ${index === 0 ? 'bg-[#fff3c4]' : ''}`}><span className="w-7 text-center text-sm font-black text-[#ff8c4d]">{rank}</span>{player?.avatar ? <img src={player.avatar} alt={player.name} className="h-8 w-8 rounded-full border-2 border-[#18233f] object-cover" /> : <span className="h-5 w-5 rounded-[5px] border-2 border-[#18233f]" style={{ backgroundColor: color }} />}<span className="min-w-0 flex-1 truncate text-sm font-black">{player?.name || id}</span><span className="text-xs font-extrabold text-[#7a8395]">Tile {position}</span></div>; })}</div><button onClick={reset} className="mt-4 w-full rounded-xl bg-[#ff8c4d] px-4 py-3 font-display text-[13px] text-[#18233f] shadow-[0_4px_0_rgba(0,0,0,.18)]">Reset Game</button></section>}
           </section>
         </aside>
