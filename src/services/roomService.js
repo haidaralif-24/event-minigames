@@ -192,15 +192,10 @@ export async function beginRoll(playerId) {
 
 // Step 2: resolve the roll's outcome once the shared animation has played out
 // on the rolling player's device, and clear the "rolling" flag for everyone.
-export async function rollForActivePlayer(playerId, die1, die2) {
-  // Two dice (2d6) — the larger average step (~7 vs ~3.5 for one die) roughly
-  // halves the number of turns (and rounds) needed to cross the 67-tile board,
-  // so a full game runs about half as long. Each die is sanitized to 1..6 and
-  // the move is their sum (2..12) so a malformed client value can't break
-  // movement.
-  const d1 = Math.min(6, Math.max(1, Number(die1) || 1));
-  const d2 = Math.min(6, Math.max(1, Number(die2) || 1));
-  const roll = d1 + d2;
+export async function rollForActivePlayer(playerId) {
+  // Single die (1d6) — a smaller average step (~3.5) paces a full game to
+  // roughly 30 minutes with 5-6 players on the 67-tile board.
+  const roll = Math.floor(Math.random() * 6) + 1;
   await runTransactionWithRetry(async (transaction) => {
     const snapshot = await transaction.get(gameRef());
     if (!snapshot.exists()) throw new Error('Game is not initialized.');
@@ -217,7 +212,7 @@ export async function rollForActivePlayer(playerId, die1, die2) {
     const landedTile = boardTiles[landedPosition];
     const boardPositions = { ...(game.boardPositions || {}), [playerId]: landedPosition };
     const playerCheckpoints = { ...(game.playerCheckpoints || {}) };
-    const base = { boardPositions, playerCheckpoints, rolling: null, lastRoll: { die1: d1, die2: d2, value: roll, playerId, landedPosition }, updatedAt: serverTimestamp() };
+    const base = { boardPositions, playerCheckpoints, rolling: null, lastRoll: { value: roll, playerId, landedPosition }, updatedAt: serverTimestamp() };
 
     if (landedTile?.type === 'challenge') {
       const pool = challengeContent.questions.map((question) => question.id);
@@ -235,7 +230,7 @@ export async function rollForActivePlayer(playerId, die1, die2) {
       ...base,
       boardPositions,
       playerCheckpoints,
-      lastRoll: { die1: d1, die2: d2, value: roll, playerId, landedPosition, finalPosition, tileType: landedTile?.type || 'normal' },
+      lastRoll: { value: roll, playerId, landedPosition, finalPosition, tileType: landedTile?.type || 'normal' },
       ...(finalPosition >= boardTiles.length - 1 ? { winner: playerId, phase: 'finished' } : {}),
     });
   });
